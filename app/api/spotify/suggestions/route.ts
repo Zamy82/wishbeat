@@ -23,13 +23,37 @@ function toTrack(t: SpotifyTrackRaw) {
   };
 }
 
-// Vorschläge via Search-API (Spotify hat /recommendations für neue Apps gesperrt).
+async function searchSpotify(
+  token: string,
+  query: string,
+  limit = 30
+): Promise<SpotifyTrackRaw[]> {
+  const url = new URL("https://api.spotify.com/v1/search");
+  url.searchParams.set("q", query);
+  url.searchParams.set("type", "track");
+  url.searchParams.set("limit", String(limit));
+  url.searchParams.set("market", "DE");
+
+  try {
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store"
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { tracks: { items: SpotifyTrackRaw[] } };
+    return data.tracks.items;
+  } catch {
+    return [];
+  }
+}
+
+// Vorschläge via Search-API.
 // Strategie:
-// - artist_name: Suche nach `artist:"NAME"` → Tracks dieses Künstlers
-// - year: Suche nach `year:Y-Y+2` → Tracks aus dieser Era (für "passende Songs aus der Zeit")
+// - artist_name: Suche nach Tracks des Künstlers, mit Fallback bei spärlichen Daten
+// - year: Era-Suche mit mehreren Fallback-Queries (year allein, year+hits, year+tag:hipster, year+pop)
 // - q: freie Suche
-// - exclude: Track-ID die aus den Ergebnissen rausfliegt (= der aktuell laufende)
-// - exclude_artist: Künstler-Name den wir aus den Ergebnissen rausfiltern
+// - exclude: Track-ID die rausfliegt (= aktuell laufender Track)
+// - exclude_artist: Künstler den wir rausfiltern (bei Era-Vorschlägen)
 export async function GET(req: NextRequest) {
   const token = await getValidAccessToken();
   if (!token) {
@@ -43,67 +67,64 @@ export async function GET(req: NextRequest) {
   const excludeArtist =
     req.nextUrl.searchParams.get("exclude_artist")?.toLowerCase() ?? "";
 
-  // Suche aufbauen
-  let searchQuery: string | null = null;
+  let rawTracks: SpotifyTrackRaw[] = [];
   let source: "by_artist" | "by_query" | "by_era" | null = null;
+
   if (artistName) {
-    searchQuery = `artist:"${artistName}"`;
+    // Mehrere Strategien parallel — und Ergebnisse mergen
+    const [strict, loose] = await Promise.all([
+      searchSpotify(token, `artist:"${artistName}"`, 30),
+      searchSpotify(token, artistName, 30)
+    ]);
+    rawTracks = [...strict, ...loose];
     source = "by_artist";
   } else if (yearParam) {
     const y = parseInt(yearParam, 10);
     if (!isNaN(y) && y > 1900 && y < 2100) {
-      // Range von -1 bis +1 Jahr für die Era-Vibe — das fängt das Genre/Zeitgeist gut ein
-      searchQuery = `year:${y - 1}-${y + 1}`;
+      // 4 parallele Era-Suchen → mehr Vielfalt, weniger "leere Sektion"
+      const yMin = Math.max(1900, y - 1);
+      const yMax = y + 1;
+      const [base, hits, hipster, charts] = await Promise.all([
+        searchSpotify(token, `year:${yMin}-${yMax}`, 30),
+        searchSpotify(token, `year:${yMin}-${yMax} hits`, 20),
+        searchSpotify(token, `year:${yMin}-${yMax} tag:hipster`, 20),
+        searchSpotify(token, `year:${yMin}-${yMax} charts`, 20)
+      ]);
+      rawTracks = [...base, ...hits, ...hipster, ...charts];
       source = "by_era";
     }
   } else if (query) {
-    searchQuery = query;
+    rawTracks = await searchSpotify(token, query, 30);
     source = "by_query";
   }
 
-  if (!searchQuery) {
-    return NextResponse.json({ tracks: [], source: null, reason: "no_seed" });
-  }
-
-  try {
-    const url = new URL("https://api.spotify.com/v1/search");
-    url.searchParams.set("q", searchQuery);
-    url.searchParams.set("type", "track");
-    url.searchParams.set("limit", "30");
-    url.searchParams.set("market", "DE");
-
-    const res = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store"
+  if (rawTracks.length === 0) {
+    return NextResponse.json({
+      tracks: [],
+      source,
+      reason: source ? "no_results" : "no_seed"
     });
-
-    if (!res.ok) {
-      return NextResponse.json({ tracks: [], source: null, reason: `search_${res.status}` });
-    }
-
-    const data = (await res.json()) as { tracks: { items: SpotifyTrackRaw[] } };
-    const seen = new Set<string>();
-    const tracks = data.tracks.items
-      .filter((t) => t.id !== excludeId)
-      .filter((t) => {
-        // Künstler ausschließen (für Era-Vorschläge: aktuellen Künstler nicht zeigen)
-        if (excludeArtist) {
-          const primary = t.artists[0]?.name?.toLowerCase() ?? "";
-          if (primary === excludeArtist || primary.includes(excludeArtist)) {
-            return false;
-          }
-        }
-        // Duplikate per "title+artist" rausfiltern
-        const key = `${t.name.toLowerCase()}|${t.artists[0]?.name?.toLowerCase() ?? ""}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .map(toTrack)
-      .slice(0, 8);
-
-    return NextResponse.json({ tracks, source });
-  } catch {
-    return NextResponse.json({ tracks: [], source: null, reason: "fetch_error" });
   }
+
+  // Filtern + dedupen
+  const seen = new Set<string>();
+  const tracks = rawTracks
+    .filter((t) => t.id !== excludeId)
+    .filter((t) => {
+      if (excludeArtist) {
+        const primary = t.artists[0]?.name?.toLowerCase() ?? "";
+        if (primary === excludeArtist) return false;
+      }
+      // Dedupe per Track-ID UND per title+artist (Spotify hat oft Re-Releases)
+      if (seen.has(t.id)) return false;
+      const key = `${t.name.toLowerCase()}|${t.artists[0]?.name?.toLowerCase() ?? ""}`;
+      if (seen.has(key)) return false;
+      seen.add(t.id);
+      seen.add(key);
+      return true;
+    })
+    .map(toTrack)
+    .slice(0, 8);
+
+  return NextResponse.json({ tracks, source, total_raw: rawTracks.length });
 }

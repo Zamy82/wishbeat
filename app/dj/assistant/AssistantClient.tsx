@@ -44,7 +44,9 @@ const QUICK_GENRES = [
 export default function AssistantClient() {
   const [nowPlaying, setNowPlaying] = useState<NowPlayingResp | null>(null);
   const [moreByArtist, setMoreByArtist] = useState<SuggestionsResp | null>(null);
+  const [moreByArtistLoading, setMoreByArtistLoading] = useState(false);
   const [eraSuggestions, setEraSuggestions] = useState<SuggestionsResp | null>(null);
+  const [eraLoading, setEraLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Track[]>([]);
   const [searching, setSearching] = useState(false);
@@ -56,7 +58,9 @@ export default function AssistantClient() {
   const fetchSuggestionsForTrack = useCallback(async (track: NowPlayingTrack) => {
     const firstArtist = track.artist.split(",")[0]?.trim() ?? "";
 
-    // Parallel: Mehr-vom-Künstler + Era-Vorschläge holen
+    setMoreByArtistLoading(true);
+    if (track.release_year) setEraLoading(true);
+
     const artistParams = new URLSearchParams({ exclude: track.id });
     if (firstArtist) artistParams.set("artist_name", firstArtist);
 
@@ -65,14 +69,22 @@ export default function AssistantClient() {
     if (firstArtist) eraParams.set("exclude_artist", firstArtist);
 
     const [artistRes, eraRes] = await Promise.all([
-      fetch(`/api/spotify/suggestions?${artistParams.toString()}`).then((r) => r.json()).catch(() => null),
+      fetch(`/api/spotify/suggestions?${artistParams.toString()}`)
+        .then((r) => r.json())
+        .catch(() => null),
       track.release_year
-        ? fetch(`/api/spotify/suggestions?${eraParams.toString()}`).then((r) => r.json()).catch(() => null)
+        ? fetch(`/api/spotify/suggestions?${eraParams.toString()}`)
+            .then((r) => r.json())
+            .catch(() => null)
         : Promise.resolve(null)
     ]);
 
-    if (artistRes) setMoreByArtist(artistRes);
-    if (eraRes) setEraSuggestions(eraRes);
+    setMoreByArtist(artistRes ?? { tracks: [], source: null });
+    setMoreByArtistLoading(false);
+    if (track.release_year) {
+      setEraSuggestions(eraRes ?? { tracks: [], source: null });
+      setEraLoading(false);
+    }
   }, []);
 
   const fetchNowPlaying = useCallback(async () => {
@@ -200,9 +212,13 @@ export default function AssistantClient() {
                 Wenn Spotify spielt, erscheinen hier Songs vom gleichen Künstler.
               </p>
             </div>
+          ) : moreByArtistLoading ? (
+            <div className="rounded-3xl bg-white/5 border border-white/10 p-6 h-44 animate-pulse" />
           ) : !moreByArtist || moreByArtist.tracks.length === 0 ? (
             <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center h-44 flex items-center justify-center">
-              <p className="text-white/40 text-sm">Suche nach mehr Tracks…</p>
+              <p className="text-white/40 text-sm">
+                Wenig Tracks von {playing.track.artist.split(",")[0]} verfügbar. Nutz unten die Suche oder Era-Vorschläge.
+              </p>
             </div>
           ) : (
             <TrackList
@@ -225,14 +241,14 @@ export default function AssistantClient() {
             </span>
           </h2>
 
-          {!eraSuggestions ? (
+          {eraLoading ? (
             <div className="rounded-3xl bg-white/5 border border-white/10 p-6 animate-pulse">
               <div className="h-16 bg-white/5 rounded-xl" />
             </div>
-          ) : eraSuggestions.tracks.length === 0 ? (
+          ) : !eraSuggestions || eraSuggestions.tracks.length === 0 ? (
             <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-center">
               <p className="text-white/40 text-sm">
-                Keine passenden Tracks aus dieser Era gefunden.
+                Keine Era-Treffer für {playing.track.release_year}. Probier die Quick-Genre-Buttons unten.
               </p>
             </div>
           ) : (
