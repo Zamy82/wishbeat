@@ -14,6 +14,10 @@ interface Track {
   uri: string;
 }
 
+interface AITrack extends Track {
+  why: string;
+}
+
 type NowPlayingResp =
   | { playing: true; progress_ms: number; track: Track; features: null }
   | { playing: false; reason: string };
@@ -24,7 +28,22 @@ type SuggestionsResp = {
   reason?: string;
 };
 
+type AISuggestionsResp = {
+  tracks: AITrack[];
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_tokens: number;
+    cache_creation_tokens: number;
+  };
+};
+
 type Toast = { kind: "ok" | "err"; text: string } | null;
+type AIState =
+  | { status: "idle" }
+  | { status: "loading"; forTrackId: string }
+  | { status: "ready"; forTrackId: string; tracks: AITrack[] }
+  | { status: "error"; forTrackId: string; message: string };
 
 const QUICK_GENRES = [
   { label: "🎤 Schlager", q: "schlager party hits" },
@@ -40,12 +59,14 @@ const QUICK_GENRES = [
 export default function AssistantClient() {
   const [nowPlaying, setNowPlaying] = useState<NowPlayingResp | null>(null);
   const [moreByArtist, setMoreByArtist] = useState<SuggestionsResp | null>(null);
+  const [ai, setAi] = useState<AIState>({ status: "idle" });
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Track[]>([]);
   const [searching, setSearching] = useState(false);
   const [queueBusy, setQueueBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast>(null);
   const lastTrackIdRef = useRef<string | null>(null);
+  const aiRequestedForRef = useRef<string | null>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchSuggestionsForTrack = useCallback(async (track: Track) => {
@@ -59,6 +80,38 @@ export default function AssistantClient() {
     } catch {}
   }, []);
 
+  const fetchAISuggestions = useCallback(async (track: Track) => {
+    setAi({ status: "loading", forTrackId: track.id });
+    try {
+      const res = await fetch("/api/spotify/ai-suggestions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: track.title,
+          artist: track.artist,
+          album: track.album
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAi({
+          status: "error",
+          forTrackId: track.id,
+          message: data.error ?? "Unbekannter Fehler"
+        });
+        return;
+      }
+      const ok = data as AISuggestionsResp;
+      setAi({ status: "ready", forTrackId: track.id, tracks: ok.tracks });
+    } catch (err) {
+      setAi({
+        status: "error",
+        forTrackId: track.id,
+        message: err instanceof Error ? err.message : "Netzwerk-Fehler"
+      });
+    }
+  }, []);
+
   const fetchNowPlaying = useCallback(async () => {
     try {
       const res = await fetch("/api/spotify/now-playing");
@@ -67,9 +120,14 @@ export default function AssistantClient() {
       if (data.playing && data.track.id !== lastTrackIdRef.current) {
         lastTrackIdRef.current = data.track.id;
         fetchSuggestionsForTrack(data.track);
+        // KI nur einmal pro Track automatisch fragen
+        if (aiRequestedForRef.current !== data.track.id) {
+          aiRequestedForRef.current = data.track.id;
+          fetchAISuggestions(data.track);
+        }
       }
     } catch {}
-  }, [fetchSuggestionsForTrack]);
+  }, [fetchSuggestionsForTrack, fetchAISuggestions]);
 
   useEffect(() => {
     fetchNowPlaying();
@@ -111,7 +169,7 @@ export default function AssistantClient() {
     runSearch(q);
   }
 
-  async function queueTrack(track: Track) {
+  async function queueTrack(track: Track | AITrack) {
     setQueueBusy(track.id);
     try {
       const res = await fetch("/api/spotify/queue", {
@@ -127,6 +185,14 @@ export default function AssistantClient() {
       );
     } finally {
       setQueueBusy(null);
+    }
+  }
+
+  function refreshAI() {
+    if (playing) {
+      // Force-refresh — auch wenn schon angefragt
+      aiRequestedForRef.current = playing.track.id;
+      fetchAISuggestions(playing.track);
     }
   }
 
@@ -186,9 +252,7 @@ export default function AssistantClient() {
             </div>
           ) : !moreByArtist || moreByArtist.tracks.length === 0 ? (
             <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center h-44 flex items-center justify-center">
-              <p className="text-white/40 text-sm">
-                Suche nach mehr Tracks…
-              </p>
+              <p className="text-white/40 text-sm">Suche nach mehr Tracks…</p>
             </div>
           ) : (
             <TrackList
@@ -199,6 +263,100 @@ export default function AssistantClient() {
           )}
         </section>
       </div>
+
+      {/* KI-Vorschläge — passend zum aktuellen Song */}
+      <section className="mt-8">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xs uppercase tracking-widest text-white/40 flex items-center gap-2">
+            <span className="text-base">🤖</span>
+            KI-Vorschläge — passend zum aktuellen Song
+          </h2>
+          {playing && ai.status !== "loading" && (
+            <button
+              onClick={refreshAI}
+              className="text-xs text-white/40 hover:text-white transition flex items-center gap-1"
+            >
+              ↻ Neu fragen
+            </button>
+          )}
+        </div>
+
+        {!playing ? (
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center">
+            <p className="text-white/40 text-sm">
+              Sobald Spotify spielt, fragt die KI nach passenden Folgesongs.
+            </p>
+          </div>
+        ) : ai.status === "loading" ? (
+          <div className="rounded-3xl border border-white/10 bg-gradient-to-r from-neon-purple/10 via-neon-pink/10 to-neon-cyan/10 p-6">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-neon-pink animate-pulse" />
+              <div
+                className="w-2 h-2 rounded-full bg-neon-purple animate-pulse"
+                style={{ animationDelay: "150ms" }}
+              />
+              <div
+                className="w-2 h-2 rounded-full bg-neon-cyan animate-pulse"
+                style={{ animationDelay: "300ms" }}
+              />
+              <p className="text-white/70 text-sm font-medium ml-2">
+                Die KI denkt nach…
+              </p>
+            </div>
+          </div>
+        ) : ai.status === "error" ? (
+          <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-6">
+            <p className="text-red-300 text-sm font-medium">Fehler: {ai.message}</p>
+            <button
+              onClick={refreshAI}
+              className="mt-3 text-xs text-white/60 hover:text-white underline underline-offset-2"
+            >
+              Nochmal versuchen
+            </button>
+          </div>
+        ) : ai.status === "ready" && ai.tracks.length > 0 ? (
+          <ul className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {ai.tracks.map((track) => (
+              <li
+                key={track.id}
+                className="flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/5 hover:border-neon-purple/40 hover:bg-white/[0.07] p-3 transition"
+              >
+                <div className="flex items-center gap-3">
+                  {track.cover_url && (
+                    <Image
+                      src={track.cover_url}
+                      alt={track.album}
+                      width={48}
+                      height={48}
+                      className="rounded-lg flex-shrink-0"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-semibold truncate text-sm">
+                      {track.title}
+                    </p>
+                    <p className="text-white/50 text-xs truncate">{track.artist}</p>
+                  </div>
+                  <button
+                    onClick={() => queueTrack(track)}
+                    disabled={queueBusy === track.id}
+                    className="flex-shrink-0 px-3 py-1.5 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
+                  >
+                    {queueBusy === track.id ? "…" : "+ Queue"}
+                  </button>
+                </div>
+                <p className="text-white/50 text-xs italic leading-snug pl-1">
+                  💭 {track.why}
+                </p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-center">
+            <p className="text-white/40 text-sm">Keine Vorschläge</p>
+          </div>
+        )}
+      </section>
 
       {/* Suche */}
       <section className="mt-8">
