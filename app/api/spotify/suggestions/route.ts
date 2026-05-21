@@ -23,11 +23,16 @@ function toTrack(t: SpotifyTrackRaw) {
   };
 }
 
+// Spotify hat das Search-Limit für unsere App auf 10 reduziert — alles darüber
+// gibt 400 "Invalid limit". Wir gleichen das durch mehrere parallele Queries aus.
+const MAX_SEARCH_LIMIT = 10;
+
 async function searchSpotify(
   token: string,
   query: string,
-  limit = 30
+  requestedLimit = MAX_SEARCH_LIMIT
 ): Promise<SpotifyTrackRaw[]> {
+  const limit = Math.min(requestedLimit, MAX_SEARCH_LIMIT);
   const url = new URL("https://api.spotify.com/v1/search");
   url.searchParams.set("q", query);
   url.searchParams.set("type", "track");
@@ -71,30 +76,32 @@ export async function GET(req: NextRequest) {
   let source: "by_artist" | "by_query" | "by_era" | null = null;
 
   if (artistName) {
-    // Mehrere Strategien parallel — und Ergebnisse mergen
-    const [strict, loose] = await Promise.all([
-      searchSpotify(token, `artist:"${artistName}"`, 30),
-      searchSpotify(token, artistName, 30)
+    // 3 parallele Such-Strategien — kompensiert das niedrige Limit
+    const [strict, loose, byTitle] = await Promise.all([
+      searchSpotify(token, `artist:"${artistName}"`),
+      searchSpotify(token, artistName),
+      searchSpotify(token, `${artistName} hits`)
     ]);
-    rawTracks = [...strict, ...loose];
+    rawTracks = [...strict, ...loose, ...byTitle];
     source = "by_artist";
   } else if (yearParam) {
     const y = parseInt(yearParam, 10);
     if (!isNaN(y) && y > 1900 && y < 2100) {
-      // 4 parallele Era-Suchen → mehr Vielfalt, weniger "leere Sektion"
+      // 5 parallele Era-Suchen → genug Vielfalt trotz limit=10 pro Call
       const yMin = Math.max(1900, y - 1);
       const yMax = y + 1;
-      const [base, hits, hipster, charts] = await Promise.all([
-        searchSpotify(token, `year:${yMin}-${yMax}`, 30),
-        searchSpotify(token, `year:${yMin}-${yMax} hits`, 20),
-        searchSpotify(token, `year:${yMin}-${yMax} tag:hipster`, 20),
-        searchSpotify(token, `year:${yMin}-${yMax} charts`, 20)
+      const [base, hits, hipster, charts, pop] = await Promise.all([
+        searchSpotify(token, `year:${yMin}-${yMax}`),
+        searchSpotify(token, `year:${yMin}-${yMax} hits`),
+        searchSpotify(token, `year:${yMin}-${yMax} tag:hipster`),
+        searchSpotify(token, `year:${yMin}-${yMax} charts`),
+        searchSpotify(token, `year:${yMin}-${yMax} pop`)
       ]);
-      rawTracks = [...base, ...hits, ...hipster, ...charts];
+      rawTracks = [...base, ...hits, ...hipster, ...charts, ...pop];
       source = "by_era";
     }
   } else if (query) {
-    rawTracks = await searchSpotify(token, query, 30);
+    rawTracks = await searchSpotify(token, query);
     source = "by_query";
   }
 
