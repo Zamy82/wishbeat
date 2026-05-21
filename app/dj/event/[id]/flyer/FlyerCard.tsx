@@ -38,6 +38,7 @@ interface Theme {
   url: string;
   brandText: string;
   brandMark: string;
+  brandMarkText: string; // Farbe des "w" Buchstaben im Logo-Kreis
 }
 
 const THEMES: Record<DesignKey, Theme> = {
@@ -67,7 +68,8 @@ const THEMES: Record<DesignKey, Theme> = {
     footerBorder: "#e2e8f0",
     url: "#94a3b8",
     brandText: "#475569",
-    brandMark: "linear-gradient(135deg, #ff2e93, #22d3ee)"
+    brandMark: "linear-gradient(135deg, #ff2e93, #22d3ee)",
+    brandMarkText: "#ffffff"
   },
   neon: {
     label: "Neon Party",
@@ -95,7 +97,8 @@ const THEMES: Record<DesignKey, Theme> = {
     footerBorder: "rgba(255,255,255,0.1)",
     url: "rgba(255,255,255,0.4)",
     brandText: "rgba(255,255,255,0.6)",
-    brandMark: "linear-gradient(135deg, #ff2e93, #22d3ee)"
+    brandMark: "linear-gradient(135deg, #ff2e93, #22d3ee)",
+    brandMarkText: "#ffffff"
   },
   spotify: {
     label: "Spotify",
@@ -121,7 +124,8 @@ const THEMES: Record<DesignKey, Theme> = {
     footerBorder: "rgba(29, 185, 84, 0.25)",
     url: "rgba(255,255,255,0.45)",
     brandText: "rgba(255,255,255,0.7)",
-    brandMark: "#1DB954"
+    brandMark: "#1DB954",
+    brandMarkText: "#ffffff"
   },
   gradient: {
     label: "Gradient",
@@ -149,7 +153,8 @@ const THEMES: Record<DesignKey, Theme> = {
     footerBorder: "rgba(255,255,255,0.3)",
     url: "rgba(255,255,255,0.7)",
     brandText: "rgba(255,255,255,0.85)",
-    brandMark: "rgba(255,255,255,0.95)"
+    brandMark: "rgba(255,255,255,0.95)",
+    brandMarkText: "#a855f7"
   }
 };
 
@@ -334,6 +339,7 @@ export default function FlyerCard({
           --url: ${theme.url};
           --brand-text: ${theme.brandText};
           --brand-mark: ${theme.brandMark};
+          --brand-mark-text: ${theme.brandMarkText};
         }
 
         .flyer-stage {
@@ -359,7 +365,7 @@ export default function FlyerCard({
         }
 
         .flyer-content {
-          padding: 10mm 12mm 8mm 12mm;
+          padding: 8mm 12mm 6mm 12mm;
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -386,7 +392,7 @@ export default function FlyerCard({
         }
 
         .flyer-title {
-          font-size: 36pt;
+          font-size: 30pt;
           font-weight: 800;
           letter-spacing: -0.02em;
           line-height: 1.15;
@@ -412,8 +418,8 @@ export default function FlyerCard({
         }
 
         .flyer-qr-wrap {
-          margin: 8mm 0 5mm 0;
-          padding: 4mm;
+          margin: 5mm 0 4mm 0;
+          padding: 3mm;
           background: var(--qr-bg);
           border: 3px solid var(--qr-border);
           border-radius: 3mm;
@@ -422,24 +428,24 @@ export default function FlyerCard({
 
         .flyer-qr {
           display: block;
-          width: 62mm !important;
-          height: 62mm !important;
+          width: 54mm !important;
+          height: 54mm !important;
         }
 
         .flyer-cta {
-          font-size: 15pt;
+          font-size: 13pt;
           font-weight: 700;
-          margin: 3mm 0 6mm 0;
+          margin: 2mm 0 4mm 0;
           color: var(--cta);
         }
 
         .flyer-steps {
           list-style: none;
           padding: 0;
-          margin: 0 0 8mm 0;
+          margin: 0 0 5mm 0;
           display: flex;
           flex-direction: column;
-          gap: 3mm;
+          gap: 2mm;
           width: 100%;
           max-width: 100mm;
         }
@@ -449,14 +455,14 @@ export default function FlyerCard({
           align-items: center;
           gap: 4mm;
           text-align: left;
-          font-size: 11pt;
+          font-size: 10pt;
           color: var(--step-body);
         }
 
         .step-num {
           flex-shrink: 0;
-          width: 8mm;
-          height: 8mm;
+          width: 7mm;
+          height: 7mm;
           border-radius: 50%;
           background: var(--step-bg);
           color: var(--step-text);
@@ -464,7 +470,7 @@ export default function FlyerCard({
           align-items: center;
           justify-content: center;
           font-weight: 800;
-          font-size: 11pt;
+          font-size: 10pt;
         }
 
         .flyer-footer {
@@ -487,7 +493,7 @@ export default function FlyerCard({
           height: 5mm;
           border-radius: 50%;
           background: var(--brand-mark);
-          color: #ffffff;
+          color: var(--brand-mark-text);
           font-size: 9pt;
           font-weight: 900;
         }
@@ -516,7 +522,9 @@ export default function FlyerCard({
         @media print {
           @page {
             size: A5 portrait;
-            margin: 0;
+            /* 5mm Drucker-Sicherheitsrand — die meisten Drucker schneiden
+               sonst die letzten 3-5mm jeder Kante ab */
+            margin: 5mm;
           }
 
           html,
@@ -540,8 +548,10 @@ export default function FlyerCard({
           .flyer-card {
             box-shadow: none;
             border-radius: 0;
-            width: 148mm;
-            height: 210mm;
+            /* Karten-Größe an den druckbaren Bereich anpassen
+               (A5 = 148×210mm, minus 2× 5mm Rand = 138×200mm) */
+            width: 138mm;
+            height: 200mm;
             page-break-after: always;
           }
 
