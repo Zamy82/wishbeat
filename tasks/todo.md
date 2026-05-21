@@ -8,12 +8,13 @@
 - [x] .gitignore und .env.example angelegt
 - [x] Architektur- und Deployment-Doku in docs/
 
-## Phase 0 — Erste Schritte (du machst das)
-- [ ] Node.js v20+ auf dem Rechner installieren (falls noch nicht da): https://nodejs.org
-- [ ] Im Projektordner einmal `npm install` ausführen (lädt alle Abhängigkeiten)
-- [ ] `npm run dev` ausführen → http://localhost:3000 öffnen → Landing-Page sieht stehen
-- [ ] GitHub-Repo anlegen (Schritte siehe docs/deployment.md)
-- [ ] Vercel mit GitHub verbinden (Schritte siehe docs/deployment.md)
+## Phase 0 — Erste Schritte
+- [x] GitHub-Repo angelegt und Code gepusht (github.com/Zamy82/wishbeat)
+- [x] Vercel mit GitHub verbunden
+- [x] Supabase-Projekt angelegt, Schema eingespielt
+- [x] Spotify Developer App angelegt
+- [x] Alle Env-Vars in Vercel hinterlegt
+- [x] App ist LIVE: https://wishbeat-zamy82-s-projects.vercel.app
 
 ## Phase 1 — MVP Gäste-Wunschsong-App
 
