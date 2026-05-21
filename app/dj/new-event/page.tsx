@@ -19,6 +19,7 @@ function buildSlug(name: string, date: string): string {
 export default function NewEventPage() {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [tagline, setTagline] = useState("");
   const [date, setDate] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +44,7 @@ export default function NewEventPage() {
       .insert({
         owner_id: user.id,
         name: name.trim(),
+        tagline: tagline.trim() || null,
         event_date: date,
         slug,
         is_active: true
@@ -80,10 +82,24 @@ export default function NewEventPage() {
             <input
               type="text"
               required
-              placeholder="z.B. Hochzeit Müller"
+              placeholder="z.B. Spargelsatt"
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={80}
+              className="w-full rounded-2xl bg-white/10 border border-white/20 px-5 py-4 text-white placeholder:text-white/40 focus:outline-none focus:border-neon-purple transition"
+            />
+          </div>
+
+          <div>
+            <label className="block text-white/60 text-xs uppercase tracking-widest mb-2">
+              Untertitel <span className="lowercase text-white/30">(optional)</span>
+            </label>
+            <input
+              type="text"
+              placeholder="z.B. Spargelessen & Tanz"
+              value={tagline}
+              onChange={(e) => setTagline(e.target.value)}
+              maxLength={100}
               className="w-full rounded-2xl bg-white/10 border border-white/20 px-5 py-4 text-white placeholder:text-white/40 focus:outline-none focus:border-neon-purple transition"
             />
           </div>

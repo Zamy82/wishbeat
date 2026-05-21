@@ -15,6 +15,9 @@ create table if not exists public.events (
   created_at timestamptz default now()
 );
 
+-- Tagline-Spalte (optional, für Untertitel auf dem Flyer)
+alter table public.events add column if not exists tagline text;
+
 create index if not exists idx_events_slug on public.events(slug);
 create index if not exists idx_events_owner on public.events(owner_id);
 

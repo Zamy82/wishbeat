@@ -12,7 +12,7 @@ export default async function EventPage({ params }: Props) {
 
   const { data: event } = await supabase
     .from("events")
-    .select("id, name, event_date, is_active")
+    .select("id, name, tagline, event_date, is_active")
     .eq("slug", slug)
     .single();
 
@@ -31,6 +31,9 @@ export default async function EventPage({ params }: Props) {
         <h1 className="text-4xl font-bold tracking-tight text-white">
           {event.name}
         </h1>
+        {event.tagline && (
+          <p className="text-white/60 italic mt-2 text-lg">{event.tagline}</p>
+        )}
         {!event.is_active && (
           <p className="mt-4 text-white/50 text-sm">
             Dieses Event ist bereits beendet.

@@ -4,6 +4,7 @@ import Link from "next/link";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
 import LiveQueue from "./LiveQueue";
 import EventControls from "./EventControls";
+import TaglineEditor from "./TaglineEditor";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -45,6 +46,7 @@ export default async function DjEventPage({ params }: Props) {
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
           <div>
             <h1 className="text-3xl font-bold text-white">{event.name}</h1>
+            <TaglineEditor eventId={id} initialTagline={event.tagline} />
             <p className="text-white/40 text-sm mt-1">
               {new Date(event.event_date).toLocaleDateString("de-DE", {
                 day: "2-digit",
@@ -68,6 +70,12 @@ export default async function DjEventPage({ params }: Props) {
             <p className="text-white/30 text-xs text-center max-w-[140px] break-all">
               {eventUrl}
             </p>
+            <Link
+              href={`/dj/event/${id}/flyer`}
+              className="mt-2 px-4 py-2 rounded-full bg-gradient-to-r from-neon-pink to-neon-purple text-white text-xs font-semibold hover:opacity-90 transition"
+            >
+              🖨️ Flyer drucken
+            </Link>
           </div>
         </div>
 
