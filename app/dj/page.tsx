@@ -1,8 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { Suspense } from "react";
 import type { DjEvent } from "@/lib/types";
 import LogoutButton from "./LogoutButton";
+import SpotifyConnect from "./SpotifyConnect";
 
 export default async function DjDashboardPage() {
   const supabase = await createClient();
@@ -17,10 +19,15 @@ export default async function DjDashboardPage() {
 
   return (
     <main className="min-h-screen px-4 py-10 max-w-2xl mx-auto">
-      <header className="flex items-center justify-between mb-8">
+      <header className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold text-white">Deine Events</h1>
           <p className="text-white/40 text-sm mt-1">{user.email}</p>
+          <div className="mt-3">
+            <Suspense fallback={<div className="h-8 w-32 bg-white/5 rounded-full animate-pulse" />}>
+              <SpotifyConnect />
+            </Suspense>
+          </div>
         </div>
         <div className="flex gap-3">
           <Link

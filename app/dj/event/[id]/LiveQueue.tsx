@@ -24,12 +24,21 @@ interface Props {
   initialRequests: SongRequest[];
 }
 
+type Toast = { kind: "ok" | "err"; text: string } | null;
+
 export default function LiveQueue({ eventId, initialRequests }: Props) {
   const [requests, setRequests] = useState<SongRequest[]>(initialRequests);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [toast, setToast] = useState<Toast>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   useEffect(() => {
     const supabase = createClient();
-
     const channel = supabase
       .channel(`event-${eventId}`)
       .on(
@@ -63,10 +72,34 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
 
   async function updateStatus(requestId: string, status: RequestStatus) {
     const supabase = createClient();
-    await supabase
-      .from("song_requests")
-      .update({ status })
-      .eq("id", requestId);
+    await supabase.from("song_requests").update({ status }).eq("id", requestId);
+  }
+
+  async function approveAndQueue(req: SongRequest) {
+    setBusy(req.id);
+    try {
+      // 1) Status in DB auf approved setzen
+      await updateStatus(req.id, "approved");
+
+      // 2) Song in Spotify-Queue schieben
+      const res = await fetch("/api/spotify/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ spotify_track_id: req.spotify_track_id })
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        setToast({
+          kind: "ok",
+          text: `In Spotify-Queue: ${req.title} — ${req.artist}`
+        });
+      } else {
+        setToast({ kind: "err", text: data.message ?? "Fehler beim Queue-Push" });
+      }
+    } finally {
+      setBusy(null);
+    }
   }
 
   if (requests.length === 0) {
@@ -80,90 +113,117 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
   }
 
   return (
-    <ul className="flex flex-col gap-3">
-      {requests.map((req) => (
-        <li
-          key={req.id}
-          className={`rounded-2xl border border-white/10 bg-white/5 p-4 transition ${
-            req.status === "played" ? "opacity-50" : ""
+    <>
+      {/* Toast */}
+      {toast && (
+        <div
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl text-sm font-medium shadow-2xl border ${
+            toast.kind === "ok"
+              ? "bg-neon-cyan/20 text-neon-cyan border-neon-cyan/40 backdrop-blur"
+              : "bg-red-500/20 text-red-300 border-red-500/40 backdrop-blur"
           }`}
         >
-          <div className="flex items-center gap-3">
-            {req.cover_url && (
-              <Image
-                src={req.cover_url}
-                alt={req.title}
-                width={48}
-                height={48}
-                className="rounded-lg flex-shrink-0"
-              />
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="text-white font-semibold truncate">{req.title}</p>
-              <p className="text-white/50 text-sm truncate">{req.artist}</p>
-              {req.guest_nickname && (
-                <p className="text-white/30 text-xs mt-0.5">
-                  von {req.guest_nickname}
-                </p>
+          {toast.text}
+        </div>
+      )}
+
+      <ul className="flex flex-col gap-3">
+        {requests.map((req) => (
+          <li
+            key={req.id}
+            className={`rounded-2xl border border-white/10 bg-white/5 p-4 transition ${
+              req.status === "played" ? "opacity-50" : ""
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              {req.cover_url && (
+                <Image
+                  src={req.cover_url}
+                  alt={req.title}
+                  width={48}
+                  height={48}
+                  className="rounded-lg flex-shrink-0"
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-semibold truncate">{req.title}</p>
+                <p className="text-white/50 text-sm truncate">{req.artist}</p>
+                {req.guest_nickname && (
+                  <p className="text-white/30 text-xs mt-0.5">
+                    von {req.guest_nickname}
+                  </p>
+                )}
+              </div>
+              <span
+                className={`text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0 ${STATUS_STYLE[req.status]}`}
+              >
+                {STATUS_LABEL[req.status]}
+              </span>
+            </div>
+
+            {/* Aktions-Buttons */}
+            <div className="flex gap-2 mt-3 flex-wrap">
+              {req.status === "pending" && (
+                <>
+                  <ActionButton
+                    label={busy === req.id ? "Schiebe in Queue…" : "✓ Annehmen & queuen"}
+                    style="text-neon-cyan border-neon-cyan/40 hover:bg-neon-cyan/10"
+                    onClick={() => approveAndQueue(req)}
+                    disabled={busy === req.id}
+                  />
+                  <ActionButton
+                    label="✕ Ablehnen"
+                    style="text-red-400 border-red-500/40 hover:bg-red-500/10"
+                    onClick={() => updateStatus(req.id, "rejected")}
+                  />
+                </>
+              )}
+              {req.status === "approved" && (
+                <>
+                  <ActionButton
+                    label="🎵 Als gespielt markieren"
+                    style="text-white/60 border-white/20 hover:bg-white/10"
+                    onClick={() => updateStatus(req.id, "played")}
+                  />
+                  <ActionButton
+                    label={busy === req.id ? "…" : "↻ Nochmal queuen"}
+                    style="text-[#1DB954] border-[#1DB954]/40 hover:bg-[#1DB954]/10"
+                    onClick={() => approveAndQueue(req)}
+                    disabled={busy === req.id}
+                  />
+                </>
+              )}
+              {(req.status === "rejected" || req.status === "played") && (
+                <ActionButton
+                  label="↩ Zurücksetzen"
+                  style="text-white/30 border-white/10 hover:bg-white/5"
+                  onClick={() => updateStatus(req.id, "pending")}
+                />
               )}
             </div>
-            <span
-              className={`text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0 ${STATUS_STYLE[req.status]}`}
-            >
-              {STATUS_LABEL[req.status]}
-            </span>
-          </div>
-
-          {/* Aktions-Buttons */}
-          <div className="flex gap-2 mt-3 flex-wrap">
-            {req.status === "pending" && (
-              <>
-                <ActionButton
-                  label="✓ Annehmen"
-                  style="text-neon-cyan border-neon-cyan/40 hover:bg-neon-cyan/10"
-                  onClick={() => updateStatus(req.id, "approved")}
-                />
-                <ActionButton
-                  label="✕ Ablehnen"
-                  style="text-red-400 border-red-500/40 hover:bg-red-500/10"
-                  onClick={() => updateStatus(req.id, "rejected")}
-                />
-              </>
-            )}
-            {req.status === "approved" && (
-              <ActionButton
-                label="🎵 Als gespielt markieren"
-                style="text-white/60 border-white/20 hover:bg-white/10"
-                onClick={() => updateStatus(req.id, "played")}
-              />
-            )}
-            {(req.status === "rejected" || req.status === "played") && (
-              <ActionButton
-                label="↩ Zurücksetzen"
-                style="text-white/30 border-white/10 hover:bg-white/5"
-                onClick={() => updateStatus(req.id, "pending")}
-              />
-            )}
-          </div>
-        </li>
-      ))}
-    </ul>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 
 function ActionButton({
   label,
   style,
-  onClick
+  onClick,
+  disabled
 }: {
   label: string;
   style: string;
   onClick: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition ${style}`}
+      disabled={disabled}
+      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition disabled:opacity-50 disabled:cursor-wait ${style}`}
     >
       {label}
     </button>
