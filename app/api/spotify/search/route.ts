@@ -8,8 +8,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ tracks: [] });
   }
 
+  // Optional ?limit= — default 20 für DJ-Suche (war 8)
+  const limitParam = request.nextUrl.searchParams.get("limit");
+  const limit = limitParam ? Math.min(50, Math.max(1, parseInt(limitParam, 10) || 20)) : 20;
+
   try {
-    const tracks = await searchTracks(q);
+    const tracks = await searchTracks(q, limit);
     return NextResponse.json({ tracks });
   } catch (err) {
     console.error("Spotify search error:", err);

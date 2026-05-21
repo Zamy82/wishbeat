@@ -31,7 +31,8 @@ export default function SongRequestForm({ eventId }: Props) {
 
   const search = useCallback(async (q: string) => {
     if (q.length < 2) { setTracks([]); return; }
-    const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(q)}`);
+    // Gäste sehen 8 Treffer (mobil-freundlich, weniger Scrollen).
+    const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(q)}&limit=8`);
     const data = await res.json();
     setTracks(data.tracks ?? []);
   }, []);

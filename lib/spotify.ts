@@ -40,34 +40,71 @@ async function getAccessToken(): Promise<string> {
   return cache.access_token;
 }
 
-export async function searchTracks(query: string, limit = 8) {
-  const token = await getAccessToken();
+// Spotify-Search-Limit ist seit 2025 auf 10 pro Call begrenzt.
+// Für mehr Treffer machen wir mehrere parallele Calls mit unterschiedlichem offset.
+const MAX_PER_CALL = 10;
 
+interface SearchedTrack {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  cover_url: string | null;
+  duration_ms: number;
+}
+
+async function searchOnce(
+  token: string,
+  query: string,
+  limit: number,
+  offset: number
+): Promise<SpotifyApiTrack[]> {
   const url = new URL("https://api.spotify.com/v1/search");
   url.searchParams.set("q", query);
   url.searchParams.set("type", "track");
   url.searchParams.set("limit", String(limit));
+  url.searchParams.set("offset", String(offset));
   url.searchParams.set("market", "DE");
 
   const res = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${token}` },
     next: { revalidate: 60 }
   });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.tracks.items as SpotifyApiTrack[];
+}
 
-  if (!res.ok) {
-    throw new Error(`Spotify search failed: ${res.status}`);
+export async function searchTracks(query: string, totalLimit = 8): Promise<SearchedTrack[]> {
+  const token = await getAccessToken();
+
+  // Wenn ≤ 10 reichen, ein Call. Sonst parallele Calls mit offsets.
+  const calls: Promise<SpotifyApiTrack[]>[] = [];
+  for (let offset = 0; offset < totalLimit; offset += MAX_PER_CALL) {
+    const limit = Math.min(MAX_PER_CALL, totalLimit - offset);
+    calls.push(searchOnce(token, query, limit, offset));
   }
 
-  const data = await res.json();
+  const results = await Promise.all(calls);
+  const all = results.flat();
 
-  return data.tracks.items.map((item: SpotifyApiTrack) => ({
-    id: item.id,
-    title: item.name,
-    artist: item.artists.map((a: { name: string }) => a.name).join(", "),
-    album: item.album.name,
-    cover_url: item.album.images[1]?.url ?? item.album.images[0]?.url ?? null,
-    duration_ms: item.duration_ms
-  }));
+  // Dedupe per Track-ID — kann passieren wenn offsets sich überlappen
+  const seen = new Set<string>();
+  const unique: SearchedTrack[] = [];
+  for (const item of all) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    unique.push({
+      id: item.id,
+      title: item.name,
+      artist: item.artists.map((a) => a.name).join(", "),
+      album: item.album.name,
+      cover_url: item.album.images[1]?.url ?? item.album.images[0]?.url ?? null,
+      duration_ms: item.duration_ms
+    });
+  }
+
+  return unique.slice(0, totalLimit);
 }
 
 interface SpotifyApiTrack {
