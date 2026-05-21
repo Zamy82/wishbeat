@@ -43,6 +43,7 @@ const QUICK_GENRES = [
 
 export default function AssistantClient() {
   const [nowPlaying, setNowPlaying] = useState<NowPlayingResp | null>(null);
+  const [nowPlayingFetchedAt, setNowPlayingFetchedAt] = useState<number>(Date.now());
   const [moreByArtist, setMoreByArtist] = useState<SuggestionsResp | null>(null);
   const [moreByArtistLoading, setMoreByArtistLoading] = useState(false);
   const [eraSuggestions, setEraSuggestions] = useState<SuggestionsResp | null>(null);
@@ -92,6 +93,7 @@ export default function AssistantClient() {
       const res = await fetch("/api/spotify/now-playing");
       const data: NowPlayingResp = await res.json();
       setNowPlaying(data);
+      setNowPlayingFetchedAt(Date.now());
       if (data.playing && data.track.id !== lastTrackIdRef.current) {
         lastTrackIdRef.current = data.track.id;
         fetchSuggestionsForTrack(data.track);
@@ -195,7 +197,7 @@ export default function AssistantClient() {
               </p>
             </div>
           ) : (
-            <NowPlayingCard playing={playing} />
+            <NowPlayingCard playing={playing} fetchedAt={nowPlayingFetchedAt} />
           )}
         </section>
 
@@ -366,12 +368,29 @@ export default function AssistantClient() {
 }
 
 function NowPlayingCard({
-  playing
+  playing,
+  fetchedAt
 }: {
   playing: { progress_ms: number; track: NowPlayingTrack };
+  fetchedAt: number;
 }) {
   const { track, progress_ms } = playing;
-  const progressPct = Math.min(100, (progress_ms / track.duration_ms) * 100);
+
+  // Lokale Interpolation: zwischen den 5-Sekunden-Polls laesst sich der
+  // Fortschritt weich animieren basierend auf der verstrichenen Zeit seit dem
+  // letzten Server-Fetch.
+  const [tick, setTick] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setTick(Date.now()), 250);
+    return () => clearInterval(id);
+  }, []);
+
+  const elapsedSinceFetch = Math.max(0, tick - fetchedAt);
+  const displayedProgress = Math.min(
+    progress_ms + elapsedSinceFetch,
+    track.duration_ms
+  );
+  const progressPct = Math.min(100, (displayedProgress / track.duration_ms) * 100);
 
   return (
     <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.07] to-white/[0.02] p-5">
@@ -398,12 +417,12 @@ function NowPlayingCard({
           <div className="mt-4">
             <div className="h-1 bg-white/10 rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-neon-pink to-neon-purple transition-all duration-1000"
-                style={{ width: `${progressPct}%` }}
+                className="h-full bg-gradient-to-r from-neon-pink to-neon-purple"
+                style={{ width: `${progressPct}%`, transition: "width 250ms linear" }}
               />
             </div>
             <div className="flex justify-between mt-1 text-xs text-white/40">
-              <span>{formatDuration(progress_ms)}</span>
+              <span>{formatDuration(displayedProgress)}</span>
               <span>{formatDuration(track.duration_ms)}</span>
             </div>
           </div>
