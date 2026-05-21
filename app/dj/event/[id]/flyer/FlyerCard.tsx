@@ -72,9 +72,9 @@ const THEMES: Record<DesignKey, Theme> = {
   neon: {
     label: "Neon Party",
     swatch:
-      "linear-gradient(135deg, #1a0033 0%, #0a0a12 50%, #2d0a3a 100%)",
-    pageBg: "#0a0a12",
-    cardBg: "#13111c",
+      "linear-gradient(135deg, #2a1244 0%, #1d1530 50%, #3d1248 100%)",
+    pageBg: "#1d1530",
+    cardBg: "#2a1f3d",
     bandStyle:
       "linear-gradient(90deg, #ff2e93 0%, #a855f7 50%, #22d3ee 100%)",
     eyebrow: "#22d3ee",
@@ -100,28 +100,27 @@ const THEMES: Record<DesignKey, Theme> = {
   spotify: {
     label: "Spotify",
     swatch:
-      "linear-gradient(135deg, #064e3b 0%, #0a0a0a 50%, #1DB954 100%)",
-    pageBg: "#0a0a0a",
-    cardBg: "#191414",
+      "linear-gradient(135deg, #1e2c24 0%, #2a3d31 50%, #1DB954 100%)",
+    pageBg: "#1c2620",
+    cardBg: "#22302a",
     bandStyle: "linear-gradient(90deg, #1DB954 0%, #1ed760 100%)",
-    eyebrow: "#1DB954",
+    eyebrow: "#1ed760",
     eyebrowDot: "#1ed760",
-    titleStyle:
-      "background: linear-gradient(135deg, #1DB954 0%, #1ed760 100%); -webkit-background-clip: text; background-clip: text; color: transparent;",
+    titleStyle: "color: #1ed760;",
     tagline: "#a7f3d0",
-    date: "#94a3b8",
-    qrFrameBorder: "#1DB954",
+    date: "#86efac",
+    qrFrameBorder: "#1ed760",
     qrFrameBg: "#ffffff",
-    qrDark: "#191414",
+    qrDark: "#1c2620",
     qrLight: "#ffffff",
     cta: "#ffffff",
     stepBg: "#1DB954",
     stepText: "#ffffff",
-    stepBody: "#cbd5e1",
-    djName: "#1DB954",
-    footerBorder: "rgba(29, 185, 84, 0.2)",
-    url: "rgba(255,255,255,0.4)",
-    brandText: "rgba(255,255,255,0.6)",
+    stepBody: "#d1fae5",
+    djName: "#1ed760",
+    footerBorder: "rgba(29, 185, 84, 0.25)",
+    url: "rgba(255,255,255,0.45)",
+    brandText: "rgba(255,255,255,0.7)",
     brandMark: "#1DB954"
   },
   gradient: {
@@ -302,15 +301,14 @@ export default function FlyerCard({
               </li>
             </ol>
 
-            {/* Footer */}
+            {/* Footer — minimal */}
             <div className="flyer-footer">
-              <div className="flyer-url">{url.replace(/^https?:\/\//, "")}</div>
-              <div className="flyer-brand">
-                <span className="brand-mark">w</span>
-                <span className="brand-djname">{DJ_NAME}</span>
-                <span className="brand-sep">·</span>
-                <span>wishbeat</span>
-              </div>
+              <span className="brand-mark">w</span>
+              <span className="brand-text-line">
+                <span className="brand-name">wishbeat</span>
+                <span className="brand-sep"> · </span>
+                <span className="brand-handle">zamy82</span>
+              </span>
             </div>
           </div>
         </article>
@@ -391,8 +389,9 @@ export default function FlyerCard({
           font-size: 36pt;
           font-weight: 800;
           letter-spacing: -0.02em;
-          line-height: 1;
-          margin: 6mm 0 0 0;
+          line-height: 1.15;
+          padding: 0 4px 0.08em 4px;
+          margin: 4mm 0 0 0;
           ${theme.titleStyle}
         }
 
@@ -475,28 +474,9 @@ export default function FlyerCard({
           border-top: 1px solid var(--footer-border);
           display: flex;
           align-items: center;
-          justify-content: space-between;
-          font-size: 8.5pt;
-          color: var(--url);
-          gap: 4mm;
-        }
-
-        .flyer-url {
-          font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-          letter-spacing: -0.01em;
-          color: var(--url);
-          word-break: break-all;
-          max-width: 60%;
-        }
-
-        .flyer-brand {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          font-weight: 700;
-          color: var(--brand-text);
-          font-size: 9pt;
-          white-space: nowrap;
+          justify-content: center;
+          gap: 6px;
+          font-size: 9.5pt;
         }
 
         .brand-mark {
@@ -512,10 +492,19 @@ export default function FlyerCard({
           font-weight: 900;
         }
 
-        .brand-djname {
+        .brand-text-line {
+          color: var(--brand-text);
+          font-weight: 700;
+          letter-spacing: 0.01em;
+        }
+
+        .brand-name {
+          color: var(--brand-text);
+        }
+
+        .brand-handle {
           color: var(--dj-name);
           font-weight: 800;
-          letter-spacing: 0.02em;
         }
 
         .brand-sep {
