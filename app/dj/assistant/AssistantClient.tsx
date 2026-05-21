@@ -14,67 +14,62 @@ interface Track {
   uri: string;
 }
 
-interface AudioFeatures {
-  tempo: number;
-  energy: number;
-  valence: number;
-  danceability: number;
-  key: number;
-  mode: number;
-}
-
 type NowPlayingResp =
-  | { playing: true; progress_ms: number; track: Track; features: AudioFeatures | null }
+  | { playing: true; progress_ms: number; track: Track; features: null }
   | { playing: false; reason: string };
 
 type SuggestionsResp = {
   tracks: Track[];
-  source: "recommendations" | "artist_top_tracks" | "related_artists" | null;
+  source: "by_artist" | "by_query" | null;
   reason?: string;
 };
 
 type Toast = { kind: "ok" | "err"; text: string } | null;
 
-const KEY_NAMES = ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"];
+const QUICK_GENRES = [
+  { label: "🎤 Schlager", q: "schlager party hits" },
+  { label: "🪩 80er", q: "80s hits party" },
+  { label: "🎶 90er", q: "90s hits party" },
+  { label: "💎 2000er", q: "2000s party hits" },
+  { label: "🔥 Charts 2025", q: "top hits 2025" },
+  { label: "🎧 House", q: "house party dance" },
+  { label: "🎵 Hip-Hop", q: "hip hop party hits" },
+  { label: "🍻 Mallorca", q: "ballermann hits" }
+];
 
 export default function AssistantClient() {
   const [nowPlaying, setNowPlaying] = useState<NowPlayingResp | null>(null);
-  const [suggestions, setSuggestions] = useState<SuggestionsResp | null>(null);
+  const [moreByArtist, setMoreByArtist] = useState<SuggestionsResp | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Track[]>([]);
+  const [searching, setSearching] = useState(false);
   const [queueBusy, setQueueBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast>(null);
   const lastTrackIdRef = useRef<string | null>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Now-Playing pollen — alle 5 Sekunden
+  const fetchSuggestionsForTrack = useCallback(async (track: Track) => {
+    const params = new URLSearchParams({ exclude: track.id });
+    const firstArtist = track.artist.split(",")[0]?.trim();
+    if (firstArtist) params.set("artist_name", firstArtist);
+    try {
+      const res = await fetch(`/api/spotify/suggestions?${params.toString()}`);
+      const data: SuggestionsResp = await res.json();
+      setMoreByArtist(data);
+    } catch {}
+  }, []);
+
   const fetchNowPlaying = useCallback(async () => {
     try {
       const res = await fetch("/api/spotify/now-playing");
       const data: NowPlayingResp = await res.json();
       setNowPlaying(data);
-      if (data.playing && data.track && data.track.id !== lastTrackIdRef.current) {
+      if (data.playing && data.track.id !== lastTrackIdRef.current) {
         lastTrackIdRef.current = data.track.id;
-        // Wenn neuer Track läuft, neue Vorschläge holen
-        fetchSuggestions(data.track, data.features);
+        fetchSuggestionsForTrack(data.track);
       }
     } catch {}
-  }, []);
-
-  const fetchSuggestions = useCallback(
-    async (track: Track, features: AudioFeatures | null) => {
-      const params = new URLSearchParams({
-        seed_track: track.id,
-        exclude: track.id
-      });
-      if (track.artist_id) params.set("seed_artist", track.artist_id);
-      if (features?.tempo) params.set("tempo", String(features.tempo));
-      if (features?.energy != null) params.set("energy", String(features.energy));
-      try {
-        const res = await fetch(`/api/spotify/suggestions?${params.toString()}`);
-        const data: SuggestionsResp = await res.json();
-        setSuggestions(data);
-      } catch {}
-    },
-    []
-  );
+  }, [fetchSuggestionsForTrack]);
 
   useEffect(() => {
     fetchNowPlaying();
@@ -89,6 +84,32 @@ export default function AssistantClient() {
     const t = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(t);
   }, [toast]);
+
+  async function runSearch(q: string) {
+    if (q.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      setSearchResults(data.tracks ?? []);
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function onSearchChange(v: string) {
+    setSearchQuery(v);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => runSearch(v), 350);
+  }
+
+  function applyQuickGenre(q: string) {
+    setSearchQuery(q);
+    runSearch(q);
+  }
 
   async function queueTrack(track: Track) {
     setQueueBusy(track.id);
@@ -127,21 +148,21 @@ export default function AssistantClient() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Now Playing */}
-        <section className="lg:col-span-2">
+        <section>
           <h2 className="text-xs uppercase tracking-widest text-white/40 mb-3">
             Jetzt läuft
           </h2>
           {!nowPlaying ? (
-            <div className="rounded-3xl bg-white/5 border border-white/10 p-6 h-80 animate-pulse" />
+            <div className="rounded-3xl bg-white/5 border border-white/10 p-6 h-44 animate-pulse" />
           ) : !playing ? (
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center">
-              <div className="text-5xl mb-3">⏸️</div>
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center h-44 flex flex-col justify-center">
+              <div className="text-4xl mb-2">⏸️</div>
               <p className="text-white/70 font-medium">Spotify spielt gerade nichts</p>
-              <p className="text-white/40 text-sm mt-2">
+              <p className="text-white/40 text-xs mt-1">
                 {notPlayingReason === "nothing_playing"
-                  ? "Starte einen Song in der Spotify-App, dann erscheinen hier Cover und Vorschläge."
+                  ? "Starte einen Song in Spotify"
                   : `Status: ${notPlayingReason ?? "unbekannt"}`}
               </p>
             </div>
@@ -150,65 +171,111 @@ export default function AssistantClient() {
           )}
         </section>
 
-        {/* Suggestions */}
-        <section className="lg:col-span-3">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xs uppercase tracking-widest text-white/40">
-              Vorschläge — passend zum aktuellen Song
-            </h2>
-            {suggestions?.source && (
-              <span className="text-xs text-white/30">
-                {sourceLabel(suggestions.source)}
-              </span>
-            )}
-          </div>
-
-          {!suggestions ? (
-            <SuggestionSkeleton />
-          ) : suggestions.tracks.length === 0 ? (
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center">
-              <p className="text-white/50 text-sm">
-                Keine Vorschläge — Spotify gibt zu diesem Track gerade nichts zurück.
+        {/* Mehr vom Künstler */}
+        <section>
+          <h2 className="text-xs uppercase tracking-widest text-white/40 mb-3">
+            {playing
+              ? `Mehr von ${playing.track.artist.split(",")[0]}`
+              : "Mehr vom Künstler"}
+          </h2>
+          {!playing ? (
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center h-44 flex items-center justify-center">
+              <p className="text-white/40 text-sm">
+                Wenn Spotify spielt, erscheinen hier Songs vom gleichen Künstler.
+              </p>
+            </div>
+          ) : !moreByArtist || moreByArtist.tracks.length === 0 ? (
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-8 text-center h-44 flex items-center justify-center">
+              <p className="text-white/40 text-sm">
+                Suche nach mehr Tracks…
               </p>
             </div>
           ) : (
-            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {suggestions.tracks.map((track) => (
-                <li
-                  key={track.id}
-                  className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 hover:border-neon-purple/40 hover:bg-white/[0.07] transition"
-                >
-                  {track.cover_url && (
-                    <Image
-                      src={track.cover_url}
-                      alt={track.album}
-                      width={56}
-                      height={56}
-                      className="rounded-lg flex-shrink-0"
-                    />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-semibold truncate text-sm">
-                      {track.title}
-                    </p>
-                    <p className="text-white/50 text-xs truncate">{track.artist}</p>
-                    <p className="text-white/30 text-xs mt-0.5">
-                      {formatDuration(track.duration_ms)}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => queueTrack(track)}
-                    disabled={queueBusy === track.id}
-                    className="flex-shrink-0 px-3 py-2 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
-                  >
-                    {queueBusy === track.id ? "…" : "+ Queue"}
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <TrackList
+              tracks={moreByArtist.tracks.slice(0, 4)}
+              onQueue={queueTrack}
+              queueBusy={queueBusy}
+            />
           )}
         </section>
       </div>
+
+      {/* Suche */}
+      <section className="mt-8">
+        <h2 className="text-xs uppercase tracking-widest text-white/40 mb-3">
+          Song suchen & in Queue schieben
+        </h2>
+
+        {/* Quick-Genres */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          {QUICK_GENRES.map((g) => (
+            <button
+              key={g.q}
+              onClick={() => applyQuickGenre(g.q)}
+              className="px-3 py-1.5 rounded-full text-xs font-medium bg-white/5 border border-white/10 hover:bg-white/10 hover:border-neon-purple/40 text-white/70 hover:text-white transition"
+            >
+              {g.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Suchfeld */}
+        <div className="relative mb-4">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="Titel, Künstler oder Album…"
+            className="w-full rounded-2xl bg-white/10 border border-white/20 px-5 py-4 text-white placeholder:text-white/40 focus:outline-none focus:border-neon-purple transition"
+          />
+          {searching && (
+            <span className="absolute right-5 top-1/2 -translate-y-1/2 text-white/40 text-sm">
+              …
+            </span>
+          )}
+        </div>
+
+        {searchResults.length > 0 && (
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {searchResults.map((track) => (
+              <li
+                key={track.id}
+                className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 hover:border-neon-purple/40 hover:bg-white/[0.07] transition"
+              >
+                {track.cover_url && (
+                  <Image
+                    src={track.cover_url}
+                    alt={track.album}
+                    width={56}
+                    height={56}
+                    className="rounded-lg flex-shrink-0"
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-semibold truncate text-sm">
+                    {track.title}
+                  </p>
+                  <p className="text-white/50 text-xs truncate">{track.artist}</p>
+                  <p className="text-white/30 text-xs mt-0.5">
+                    {formatDuration(track.duration_ms)}
+                  </p>
+                </div>
+                <button
+                  onClick={() => queueTrack(track)}
+                  disabled={queueBusy === track.id}
+                  className="flex-shrink-0 px-3 py-2 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
+                >
+                  {queueBusy === track.id ? "…" : "+ Queue"}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {searchQuery.length >= 2 && !searching && searchResults.length === 0 && (
+          <p className="text-white/40 text-sm text-center py-6">Keine Treffer</p>
+        )}
+      </section>
     </>
   );
 }
@@ -216,9 +283,9 @@ export default function AssistantClient() {
 function NowPlayingCard({
   playing
 }: {
-  playing: { progress_ms: number; track: Track; features: AudioFeatures | null };
+  playing: { progress_ms: number; track: Track };
 }) {
-  const { track, features, progress_ms } = playing;
+  const { track, progress_ms } = playing;
   const progressPct = Math.min(100, (progress_ms / track.duration_ms) * 100);
 
   return (
@@ -240,7 +307,6 @@ function NowPlayingCard({
           <p className="text-white/60 text-sm truncate mt-0.5">{track.artist}</p>
           <p className="text-white/30 text-xs truncate mt-0.5">{track.album}</p>
 
-          {/* Progress bar */}
           <div className="mt-4">
             <div className="h-1 bg-white/10 rounded-full overflow-hidden">
               <div
@@ -255,65 +321,47 @@ function NowPlayingCard({
           </div>
         </div>
       </div>
-
-      {/* Audio Features */}
-      {features ? (
-        <div className="grid grid-cols-2 gap-2 mt-5">
-          <FeaturePill
-            label="BPM"
-            value={String(features.tempo)}
-            color="bg-neon-pink/15 text-neon-pink border-neon-pink/30"
-          />
-          <FeaturePill
-            label="Energy"
-            value={`${Math.round(features.energy * 100)}%`}
-            color="bg-orange-400/15 text-orange-300 border-orange-400/30"
-          />
-          <FeaturePill
-            label="Stimmung"
-            value={moodLabel(features.valence)}
-            color="bg-neon-cyan/15 text-neon-cyan border-neon-cyan/30"
-          />
-          <FeaturePill
-            label="Tonart"
-            value={`${KEY_NAMES[features.key] ?? "?"} ${features.mode === 1 ? "Dur" : "Moll"}`}
-            color="bg-neon-purple/15 text-neon-purple border-neon-purple/30"
-          />
-        </div>
-      ) : (
-        <p className="mt-5 text-xs text-white/30 text-center">
-          Audio-Features (BPM/Stimmung) für diesen Track nicht verfügbar
-        </p>
-      )}
     </div>
   );
 }
 
-function FeaturePill({
-  label,
-  value,
-  color
+function TrackList({
+  tracks,
+  onQueue,
+  queueBusy
 }: {
-  label: string;
-  value: string;
-  color: string;
+  tracks: Track[];
+  onQueue: (t: Track) => void;
+  queueBusy: string | null;
 }) {
   return (
-    <div className={`rounded-xl border px-3 py-2 ${color}`}>
-      <div className="text-[10px] uppercase tracking-widest opacity-70">{label}</div>
-      <div className="text-base font-bold">{value}</div>
-    </div>
-  );
-}
-
-function SuggestionSkeleton() {
-  return (
-    <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {Array.from({ length: 6 }).map((_, i) => (
+    <ul className="flex flex-col gap-2">
+      {tracks.map((track) => (
         <li
-          key={i}
-          className="h-20 rounded-2xl border border-white/10 bg-white/5 animate-pulse"
-        />
+          key={track.id}
+          className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 hover:border-neon-purple/40 transition"
+        >
+          {track.cover_url && (
+            <Image
+              src={track.cover_url}
+              alt={track.album}
+              width={44}
+              height={44}
+              className="rounded-lg flex-shrink-0"
+            />
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-white font-semibold truncate text-sm">{track.title}</p>
+            <p className="text-white/50 text-xs truncate">{track.album}</p>
+          </div>
+          <button
+            onClick={() => onQueue(track)}
+            disabled={queueBusy === track.id}
+            className="flex-shrink-0 px-3 py-1.5 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
+          >
+            {queueBusy === track.id ? "…" : "+ Queue"}
+          </button>
+        </li>
       ))}
     </ul>
   );
@@ -324,18 +372,4 @@ function formatDuration(ms: number): string {
   const m = Math.floor(total / 60);
   const s = total % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-function moodLabel(valence: number): string {
-  if (valence < 0.25) return "Melancholisch";
-  if (valence < 0.5) return "Ruhig";
-  if (valence < 0.75) return "Positiv";
-  return "Euphorisch";
-}
-
-function sourceLabel(source: string): string {
-  if (source === "recommendations") return "🎯 BPM-passend";
-  if (source === "artist_top_tracks") return "🎤 Vom gleichen Künstler";
-  if (source === "related_artists") return "🔗 Ähnliche Künstler";
-  return "";
 }

@@ -23,104 +23,68 @@ function toTrack(t: SpotifyTrackRaw) {
   };
 }
 
+// Vorschläge via Search-API (Spotify hat /recommendations für neue Apps gesperrt).
+// Strategie:
+// - Wenn artist_name übergeben: Suche nach `artist:"NAME"` → Tracks dieses Künstlers
+// - Wenn query übergeben: freie Suche
+// - exclude: Track-ID die aus den Ergebnissen rausfliegt (= der aktuell laufende)
 export async function GET(req: NextRequest) {
   const token = await getValidAccessToken();
   if (!token) {
     return NextResponse.json({ tracks: [], source: null, reason: "no_token" });
   }
 
-  const trackId = req.nextUrl.searchParams.get("seed_track");
-  const artistId = req.nextUrl.searchParams.get("seed_artist");
-  const tempo = req.nextUrl.searchParams.get("tempo");
-  const energy = req.nextUrl.searchParams.get("energy");
+  const artistName = req.nextUrl.searchParams.get("artist_name");
+  const query = req.nextUrl.searchParams.get("q");
   const excludeId = req.nextUrl.searchParams.get("exclude") ?? "";
 
-  // 1) Erst: Spotify-Recommendations (BPM-/Energy-gewichtet)
-  if (trackId) {
-    try {
-      const url = new URL("https://api.spotify.com/v1/recommendations");
-      url.searchParams.set("seed_tracks", trackId);
-      url.searchParams.set("limit", "10");
-      url.searchParams.set("market", "DE");
-      if (tempo) {
-        const t = Number(tempo);
-        url.searchParams.set("target_tempo", String(t));
-        url.searchParams.set("min_tempo", String(Math.max(60, t - 8)));
-        url.searchParams.set("max_tempo", String(t + 8));
-      }
-      if (energy) {
-        const e = Number(energy);
-        url.searchParams.set("target_energy", String(e));
-        url.searchParams.set("min_energy", String(Math.max(0, e - 0.15)));
-        url.searchParams.set("max_energy", String(Math.min(1, e + 0.15)));
-      }
-      const res = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store"
-      });
-      if (res.ok) {
-        const data = (await res.json()) as { tracks: SpotifyTrackRaw[] };
-        const tracks = data.tracks
-          .filter((t) => t.id !== excludeId)
-          .map(toTrack)
-          .slice(0, 8);
-        if (tracks.length > 0) {
-          return NextResponse.json({ tracks, source: "recommendations" });
-        }
-      }
-    } catch {}
+  // Suche aufbauen
+  let searchQuery: string | null = null;
+  let source: "by_artist" | "by_query" | null = null;
+  if (artistName) {
+    searchQuery = `artist:"${artistName}"`;
+    source = "by_artist";
+  } else if (query) {
+    searchQuery = query;
+    source = "by_query";
   }
 
-  // 2) Fallback: Top-Tracks des aktuellen Künstlers
-  if (artistId) {
-    try {
-      const res = await fetch(
-        `https://api.spotify.com/v1/artists/${artistId}/top-tracks?market=DE`,
-        { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
-      );
-      if (res.ok) {
-        const data = (await res.json()) as { tracks: SpotifyTrackRaw[] };
-        const tracks = data.tracks
-          .filter((t) => t.id !== excludeId)
-          .map(toTrack)
-          .slice(0, 8);
-        if (tracks.length > 0) {
-          return NextResponse.json({ tracks, source: "artist_top_tracks" });
-        }
-      }
-    } catch {}
+  if (!searchQuery) {
+    return NextResponse.json({ tracks: [], source: null, reason: "no_seed" });
   }
 
-  // 3) Letzter Fallback: Related Artists → ihre Top-Tracks
-  if (artistId) {
-    try {
-      const relRes = await fetch(
-        `https://api.spotify.com/v1/artists/${artistId}/related-artists`,
-        { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
-      );
-      if (relRes.ok) {
-        const rel = (await relRes.json()) as { artists: { id: string; name: string }[] };
-        const collected: SpotifyTrackRaw[] = [];
-        for (const a of rel.artists.slice(0, 4)) {
-          const tRes = await fetch(
-            `https://api.spotify.com/v1/artists/${a.id}/top-tracks?market=DE`,
-            { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
-          );
-          if (tRes.ok) {
-            const tData = (await tRes.json()) as { tracks: SpotifyTrackRaw[] };
-            collected.push(...tData.tracks.slice(0, 2));
-          }
-        }
-        const tracks = collected
-          .filter((t) => t.id !== excludeId)
-          .map(toTrack)
-          .slice(0, 8);
-        if (tracks.length > 0) {
-          return NextResponse.json({ tracks, source: "related_artists" });
-        }
-      }
-    } catch {}
-  }
+  try {
+    const url = new URL("https://api.spotify.com/v1/search");
+    url.searchParams.set("q", searchQuery);
+    url.searchParams.set("type", "track");
+    url.searchParams.set("limit", "12");
+    url.searchParams.set("market", "DE");
 
-  return NextResponse.json({ tracks: [], source: null, reason: "no_data" });
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store"
+    });
+
+    if (!res.ok) {
+      return NextResponse.json({ tracks: [], source: null, reason: `search_${res.status}` });
+    }
+
+    const data = (await res.json()) as { tracks: { items: SpotifyTrackRaw[] } };
+    const seen = new Set<string>();
+    const tracks = data.tracks.items
+      .filter((t) => t.id !== excludeId)
+      .filter((t) => {
+        // Duplikate per "title+artist" rausfiltern (kommt bei Spotify-Search häufig vor)
+        const key = `${t.name.toLowerCase()}|${t.artists[0]?.name?.toLowerCase() ?? ""}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map(toTrack)
+      .slice(0, 8);
+
+    return NextResponse.json({ tracks, source });
+  } catch {
+    return NextResponse.json({ tracks: [], source: null, reason: "fetch_error" });
+  }
 }
