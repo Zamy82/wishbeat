@@ -79,7 +79,15 @@ export default async function DjEventPage({ params }: Props) {
           </div>
         </div>
 
-        <EventControls eventId={id} isActive={event.is_active} />
+        <div className="flex items-center gap-3 mt-4 flex-wrap">
+          <EventControls eventId={id} isActive={event.is_active} />
+          <Link
+            href="/dj/assistant"
+            className="px-4 py-2 rounded-full border border-white/20 text-white/80 hover:text-white hover:border-white/40 text-sm transition"
+          >
+            🎛️ DJ-Assistent öffnen
+          </Link>
+        </div>
       </header>
 
       <section>
