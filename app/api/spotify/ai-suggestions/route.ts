@@ -152,7 +152,10 @@ export async function POST(request: NextRequest) {
 
   let claudeResponse;
   try {
-    claudeResponse = await client.messages.create({
+    // Cast über `as never`: adaptive thinking + output_config sind sehr neue
+    // SDK-Felder. Wir lassen den Compiler diese Felder akzeptieren, das
+    // Runtime-API kennt sie.
+    const params = {
       model: "claude-opus-4-7",
       max_tokens: 2000,
       thinking: { type: "adaptive" },
@@ -173,7 +176,8 @@ export async function POST(request: NextRequest) {
           content: `Aktuell läuft: "${title}" von ${artist}${album ? `\nAlbum: ${album}` : ""}\n\nGib mir 6 passende nächste Songs.`
         }
       ]
-    });
+    };
+    claudeResponse = await client.messages.create(params as never);
   } catch (err) {
     console.error("Claude API error:", err);
     return NextResponse.json(
