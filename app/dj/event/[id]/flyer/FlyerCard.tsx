@@ -544,6 +544,34 @@ export default function FlyerCard({
             height: 210mm;
             page-break-after: always;
           }
+
+          /* Spotify-Theme: weißer Hintergrund beim Druck — spart Tinte
+             und das Grün leuchtet sogar besser auf weißem Papier */
+          .flyer-card[data-design="spotify"] {
+            background: #ffffff !important;
+          }
+          .flyer-card[data-design="spotify"] .flyer-tagline {
+            color: #475569 !important;
+          }
+          .flyer-card[data-design="spotify"] .flyer-date {
+            color: #64748b !important;
+          }
+          .flyer-card[data-design="spotify"] .flyer-cta {
+            color: #0a0a12 !important;
+          }
+          .flyer-card[data-design="spotify"] .flyer-steps li {
+            color: #334155 !important;
+          }
+          .flyer-card[data-design="spotify"] .flyer-footer {
+            border-top-color: #e2e8f0 !important;
+          }
+          .flyer-card[data-design="spotify"] .brand-text-line,
+          .flyer-card[data-design="spotify"] .brand-name {
+            color: #475569 !important;
+          }
+          .flyer-card[data-design="spotify"] .brand-sep {
+            color: #94a3b8 !important;
+          }
         }
       `}</style>
     </>
