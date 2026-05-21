@@ -12,7 +12,7 @@ interface SpotifyCurrentlyPlaying {
     duration_ms: number;
     uri: string;
     artists: SpotifyArtist[];
-    album: { name: string; images: SpotifyAlbumImage[] };
+    album: { name: string; images: SpotifyAlbumImage[]; release_date?: string };
   } | null;
 }
 
@@ -64,6 +64,11 @@ export async function GET() {
     // ignore — kein Beinbruch wenn Features nicht da sind
   }
 
+  // Release-Jahr aus dem Album extrahieren — Format ist "YYYY", "YYYY-MM" oder "YYYY-MM-DD"
+  const releaseYear = data.item.album.release_date
+    ? parseInt(data.item.album.release_date.substring(0, 4), 10)
+    : null;
+
   return NextResponse.json({
     playing: data.is_playing,
     progress_ms: data.progress_ms,
@@ -76,7 +81,8 @@ export async function GET() {
       cover_url:
         data.item.album.images[0]?.url ?? null,
       duration_ms: data.item.duration_ms,
-      uri: data.item.uri
+      uri: data.item.uri,
+      release_year: releaseYear && !isNaN(releaseYear) ? releaseYear : null
     },
     features: features
       ? {
