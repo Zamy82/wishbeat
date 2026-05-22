@@ -44,6 +44,8 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
   // Vibe-State: aggregierte Genre-Woerter der letzten Plays
   const [vibeTokens, setVibeTokens] = useState<Record<string, number>>({});
   const [vibePlayCount, setVibePlayCount] = useState(0);
+  // raw = wie viele Plays insgesamt im event_plays-Fenster, auch ohne Genre-Tags
+  const [vibeRawPlayCount, setVibeRawPlayCount] = useState(0);
   // Match-% pro Track-ID — vom Server berechnet (funktioniert auch ohne
   // DB-Migration, da der Server Genres direkt von Spotify holt)
   const [matches, setMatches] = useState<Record<string, number>>({});
@@ -81,6 +83,7 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
         if (cancelled) return;
         setVibeTokens(data.vibeTokens ?? {});
         setVibePlayCount(data.playCount ?? 0);
+        setVibeRawPlayCount(data.rawPlayCount ?? 0);
         const mMap: Record<string, number> = {};
         const rawMatches = data.matches ?? {};
         for (const tid of Object.keys(rawMatches)) {
@@ -276,6 +279,7 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
         const vData = await vRes.json();
         setVibeTokens(vData.vibeTokens ?? {});
         setVibePlayCount(vData.playCount ?? 0);
+        setVibeRawPlayCount(vData.rawPlayCount ?? 0);
       } catch {}
     } catch (e) {
       setToast({ kind: "err", text: `Fehler: ${(e as Error).message ?? "unbekannt"}` });
@@ -346,17 +350,17 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
 
       {/* Vibe-Status: zeigt woraus der Match-Score gerade gebildet wird */}
       <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-xs space-y-2">
-        {vibePlayCount === 0 ? (
+        {vibeRawPlayCount === 0 ? (
           <span className="text-white/40">
             🎚 Vibe: Noch keine Songs getrackt.
           </span>
-        ) : topVibeWords.length === 0 ? (
-          <span className="text-white/40">
-            🎚 Vibe: {vibePlayCount} Song(s) getrackt, aber Spotify hat keine Genre-Tags geliefert.
+        ) : vibePlayCount === 0 ? (
+          <span className="text-yellow-300/80">
+            🎚 {vibeRawPlayCount} Song{vibeRawPlayCount > 1 ? "s" : ""} getrackt, aber Spotify liefert für den/die Künstler keine Genre-Tags. Match-Score braucht Songs mit Tags (z.&nbsp;B. populäre Künstler).
           </span>
         ) : (
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-white/50">🎚 Aktueller Vibe ({vibePlayCount} Song{vibePlayCount > 1 ? "s" : ""}):</span>
+            <span className="text-white/50">🎚 Aktueller Vibe ({vibePlayCount} von {vibeRawPlayCount} Song{vibeRawPlayCount > 1 ? "s" : ""} mit Tags):</span>
             {topVibeWords.map((word) => (
               <span
                 key={word}
