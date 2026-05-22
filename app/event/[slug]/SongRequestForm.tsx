@@ -5,6 +5,7 @@ import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import type { SpotifyTrack } from "@/lib/types";
 import { getGuestSessionId } from "@/lib/guest-session";
+import { subscribeForEvent } from "@/lib/push-client";
 
 interface Props {
   eventId: string;
@@ -51,17 +52,6 @@ export default function SongRequestForm({ eventId }: Props) {
     setLoading(true);
     setError(null);
 
-    // Browser-Notification-Permission anfragen (für "Dein Song läuft gerade!")
-    if (
-      typeof window !== "undefined" &&
-      "Notification" in window &&
-      Notification.permission === "default"
-    ) {
-      try {
-        await Notification.requestPermission();
-      } catch {}
-    }
-
     const sessionId = getGuestSessionId();
     const supabase = createClient();
     const { error: dbError } = await supabase.from("song_requests").insert({
@@ -83,6 +73,10 @@ export default function SongRequestForm({ eventId }: Props) {
     }
 
     setSubmitted(true);
+
+    // Im Hintergrund: Service Worker + Push-Subscription anlegen.
+    // Fehler ignorieren — Wunsch ist abgespeichert, Push ist nur Bonus.
+    subscribeForEvent({ eventId, sessionId }).catch(() => {});
   }
 
   if (submitted) {

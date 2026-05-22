@@ -1,0 +1,24 @@
+{
+  "name": "wishbeat — Wunschsongs an den DJ",
+  "short_name": "wishbeat",
+  "description": "Schick Wunschsongs an den DJ und sieh live was als nächstes läuft.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0a12",
+  "theme_color": "#a855f7",
+  "icons": [
+    {
+      "src": "/icon",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-icon",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

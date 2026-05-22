@@ -75,6 +75,13 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
           kind: "ok",
           text: `Automatisch als gespielt markiert: ${match.title}`
         });
+
+        // Push-Notification an den Gast schicken (im Hintergrund)
+        fetch("/api/push/notify-played", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ request_id: match.id })
+        }).catch(() => {});
       } catch {}
     }
 
@@ -124,6 +131,15 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
   async function updateStatus(requestId: string, status: RequestStatus) {
     const supabase = createClient();
     await supabase.from("song_requests").update({ status }).eq("id", requestId);
+
+    // Bei manuellem "Als gespielt markieren": Push an Gast
+    if (status === "played") {
+      fetch("/api/push/notify-played", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ request_id: requestId })
+      }).catch(() => {});
+    }
   }
 
   async function approveAndQueue(req: SongRequest) {
