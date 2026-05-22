@@ -13,12 +13,12 @@ export const LOGO_STYLES: { id: LogoStyle; label: string; description: string }[
   {
     id: "vinyl",
     label: "Vinyl",
-    description: "Schallplatte mit „Z" als Label — klassisch DJ"
+    description: "Schallplatte mit Z als Label - klassisch DJ"
   },
   {
     id: "equalizer",
     label: "Equalizer",
-    description: "5 Tonbalken im Neon-Verlauf — energetisch"
+    description: "5 Tonbalken im Neon-Verlauf - energetisch"
   },
   {
     id: "headphones",
@@ -28,12 +28,12 @@ export const LOGO_STYLES: { id: LogoStyle; label: string; description: string }[
   {
     id: "wave",
     label: "Soundwave Z",
-    description: "Buchstabe Z als Audio-Wellenform — modern"
+    description: "Buchstabe Z als Audio-Wellenform - modern"
   },
   {
     id: "monogram",
     label: "Monogramm",
-    description: "DJ + Z im Kreis — klassisch elegant"
+    description: "DJ + Z im Kreis - klassisch elegant"
   }
 ];
 
