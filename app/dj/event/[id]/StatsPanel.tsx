@@ -27,12 +27,35 @@ interface ArtistStat {
 export default function StatsPanel({ eventId, initialRequests }: Props) {
   const [requests, setRequests] = useState<SongRequest[]>(initialRequests);
 
-  // Realtime-Subscription — Stats updaten sich automatisch bei neuen Wünschen
-  // oder Status-Wechseln (angenommen, gespielt, abgelehnt).
+  // Realtime + Polling-Fallback.
+  // Realtime ist die primaere Quelle, aber falls die Subscription drop'pt
+  // (passiert nach langer Idle-Zeit), holen wir die Daten alle 8 Sekunden
+  // direkt nach. So sind die Stats nie mehr als 8 Sekunden veraltet.
   useEffect(() => {
     const supabase = createClient();
+
+    async function refetchAll() {
+      const { data } = await supabase
+        .from("song_requests")
+        .select("*")
+        .eq("event_id", eventId)
+        .order("created_at", { ascending: true });
+      if (data) setRequests(data as SongRequest[]);
+    }
+
+    // Polling alle 8 Sekunden — pausiert wenn Tab inaktiv
+    const pollId = setInterval(() => {
+      if (document.visibilityState === "visible") refetchAll();
+    }, 8000);
+
+    // Realtime als primaere Quelle fuer sofortige Updates.
+    // Channel-Name mit Random-Suffix, damit mehrere Subscriptions sich
+    // nicht aushebeln.
+    const channelName = `stats-${eventId}-${Math.random()
+      .toString(36)
+      .slice(2, 9)}`;
     const channel = supabase
-      .channel(`stats-${eventId}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
@@ -58,6 +81,7 @@ export default function StatsPanel({ eventId, initialRequests }: Props) {
       .subscribe();
 
     return () => {
+      clearInterval(pollId);
       supabase.removeChannel(channel);
     };
   }, [eventId]);
