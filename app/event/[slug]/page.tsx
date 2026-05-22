@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import SongRequestForm from "./SongRequestForm";
 import TipSection from "./TipSection";
 import RatingSection from "./RatingSection";
+import LiveQueueDisplay from "./LiveQueueDisplay";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -63,6 +64,9 @@ export default async function EventPage({ params }: Props) {
           </p>
         )}
       </header>
+
+      {/* Live-Queue — was läuft, was kommt als nächstes */}
+      {event.is_active && <LiveQueueDisplay eventId={event.id} />}
 
       {event.is_active ? (
         <SongRequestForm eventId={event.id} />

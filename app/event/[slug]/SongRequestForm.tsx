@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import type { SpotifyTrack } from "@/lib/types";
+import { getGuestSessionId } from "@/lib/guest-session";
 
 interface Props {
   eventId: string;
@@ -50,6 +51,18 @@ export default function SongRequestForm({ eventId }: Props) {
     setLoading(true);
     setError(null);
 
+    // Browser-Notification-Permission anfragen (für "Dein Song läuft gerade!")
+    if (
+      typeof window !== "undefined" &&
+      "Notification" in window &&
+      Notification.permission === "default"
+    ) {
+      try {
+        await Notification.requestPermission();
+      } catch {}
+    }
+
+    const sessionId = getGuestSessionId();
     const supabase = createClient();
     const { error: dbError } = await supabase.from("song_requests").insert({
       event_id: eventId,
@@ -58,6 +71,7 @@ export default function SongRequestForm({ eventId }: Props) {
       artist: selected.artist,
       cover_url: selected.cover_url,
       guest_nickname: nickname.trim() || null,
+      requester_session_id: sessionId,
       status: "pending"
     });
 
