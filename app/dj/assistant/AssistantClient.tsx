@@ -165,28 +165,9 @@ export default function AssistantClient() {
     }
   }
 
-  async function playNextTrack(track: Track) {
-    setQueueBusy(track.id);
-    try {
-      const res = await fetch("/api/spotify/play-next", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ spotify_track_id: track.id })
-      });
-      const data = await res.json();
-      const okText =
-        data.mode === "queued_fallback"
-          ? `In Queue (am Ende): ${track.title}`
-          : `🔝 Als nächster: ${track.title}`;
-      setToast(
-        data.ok
-          ? { kind: "ok", text: okText }
-          : { kind: "err", text: data.message ?? "Konnte Track nicht platzieren" }
-      );
-    } finally {
-      setQueueBusy(null);
-    }
-  }
+  // playNextTrack entfernt — Spotify Web API erlaubt kein zuverlässiges
+  // "Insert auf Platz 1 ohne Unterbrechung". Nutze stattdessen Spotify-App
+  // direkt für Reorder (Rechtsklick → Als Nächstes spielen).
 
   const playing = nowPlaying?.playing === true && "track" in nowPlaying ? nowPlaying : null;
   const notPlayingReason =
@@ -254,7 +235,6 @@ export default function AssistantClient() {
             <TrackList
               tracks={moreByArtist.tracks.slice(0, 5)}
               onQueue={queueTrack}
-              onPlayNext={playNextTrack}
               queueBusy={queueBusy}
             />
           )}
@@ -304,23 +284,13 @@ export default function AssistantClient() {
                     </p>
                     <p className="text-white/50 text-xs truncate">{track.artist}</p>
                   </div>
-                  <div className="flex flex-col gap-1 flex-shrink-0">
-                    <button
-                      onClick={() => queueTrack(track)}
-                      disabled={queueBusy === track.id}
-                      className="px-3 py-1 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
-                    >
-                      {queueBusy === track.id ? "…" : "+ Queue"}
-                    </button>
-                    <button
-                      onClick={() => playNextTrack(track)}
-                      disabled={queueBusy === track.id}
-                      className="px-3 py-1 rounded-full bg-orange-500 hover:bg-orange-400 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
-                      title="Als nächster Song nach dem aktuellen platzieren (Platz 1 in der Queue)"
-                    >
-                      🔝 #1 in Queue
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => queueTrack(track)}
+                    disabled={queueBusy === track.id}
+                    className="flex-shrink-0 px-3 py-1.5 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
+                  >
+                    {queueBusy === track.id ? "…" : "+ Queue"}
+                  </button>
                 </li>
               ))}
             </ul>
@@ -386,23 +356,13 @@ export default function AssistantClient() {
                     {formatDuration(track.duration_ms)}
                   </p>
                 </div>
-                <div className="flex flex-col gap-1.5 flex-shrink-0">
-                  <button
-                    onClick={() => queueTrack(track)}
-                    disabled={queueBusy === track.id}
-                    className="px-3 py-1.5 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
-                  >
-                    {queueBusy === track.id ? "…" : "+ Queue"}
-                  </button>
-                  <button
-                    onClick={() => playNextTrack(track)}
-                    disabled={queueBusy === track.id}
-                    className="px-3 py-1.5 rounded-full bg-orange-500 hover:bg-orange-400 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
-                    title="Als nächster Song nach dem aktuellen platzieren (Platz 1 in der Queue)"
-                  >
-                    🔝 #1 in Queue
-                  </button>
-                </div>
+                <button
+                  onClick={() => queueTrack(track)}
+                  disabled={queueBusy === track.id}
+                  className="flex-shrink-0 px-3 py-2 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
+                >
+                  {queueBusy === track.id ? "…" : "+ Queue"}
+                </button>
               </li>
             ))}
           </ul>
