@@ -54,9 +54,11 @@ export async function subscribeForEvent(params: {
   let sub = await reg.pushManager.getSubscription();
   if (!sub) {
     try {
+      const keyArray = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        // Cast nötig wegen TS-Strict-Mismatch zw. Uint8Array und BufferSource
+        applicationServerKey: keyArray.buffer as ArrayBuffer
       });
     } catch {
       return { ok: false, reason: "subscribe_failed" };
