@@ -147,6 +147,52 @@ async function fetchArtistGenres(token: string, artistId: string): Promise<strin
   return genres;
 }
 
+// Debug: gibt das rohe Spotify-Track + Artist-Response zurueck.
+// Dient nur zum Diagnose-Endpoint, NICHT fuer Produktiv-Code.
+export async function debugTrackArtists(trackId: string) {
+  const token = await getAccessToken();
+  const trackRes = await fetch(`https://api.spotify.com/v1/tracks/${trackId}?market=DE`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store"
+  });
+  const trackStatus = trackRes.status;
+  let trackData: unknown = null;
+  try { trackData = trackRes.ok ? await trackRes.json() : await trackRes.text(); } catch {}
+
+  if (!trackRes.ok) {
+    return { trackStatus, trackData };
+  }
+
+  const td = trackData as { name?: string; artists?: { id: string; name: string }[] };
+  const artists = td.artists ?? [];
+  const artistsDetail = await Promise.all(
+    artists.map(async (a) => {
+      const r = await fetch(`https://api.spotify.com/v1/artists/${a.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store"
+      });
+      let body: unknown = null;
+      try { body = r.ok ? await r.json() : await r.text(); } catch {}
+      return {
+        id: a.id,
+        name: a.name,
+        status: r.status,
+        bodyKeys: r.ok && body && typeof body === "object" ? Object.keys(body as object) : null,
+        genres: r.ok ? (body as { genres?: string[] })?.genres ?? null : null,
+        body
+      };
+    })
+  );
+
+  return {
+    trackStatus,
+    trackName: td.name ?? null,
+    trackArtists: artists.map((a) => ({ id: a.id, name: a.name })),
+    artistsDetail,
+    tokenPrefix: token.substring(0, 8) + "..."
+  };
+}
+
 // Holt die zusammengefassten Genre-Tags ALLER beteiligten Artists eines Tracks.
 // Wenn mehrere Artists: alle Genres deduppen.
 export async function getTrackArtistGenres(trackId: string): Promise<string[]> {
