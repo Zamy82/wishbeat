@@ -40,6 +40,12 @@ export default async function DjEventPage({ params }: Props) {
     .eq("event_id", id)
     .order("created_at", { ascending: false });
 
+  const { data: plays } = await supabase
+    .from("event_plays")
+    .select("*")
+    .eq("event_id", id)
+    .order("played_at", { ascending: true });
+
   const eventUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/event/${event.slug}`;
 
   return (
@@ -110,7 +116,11 @@ export default async function DjEventPage({ params }: Props) {
 
       <section className="mt-10">
         <h2 className="text-lg font-semibold text-white/80 mb-4">📊 Statistik</h2>
-        <StatsPanel eventId={id} initialRequests={requests ?? []} />
+        <StatsPanel
+          eventId={id}
+          initialRequests={requests ?? []}
+          initialPlays={plays ?? []}
+        />
       </section>
 
       <section className="mt-10">

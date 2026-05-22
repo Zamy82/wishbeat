@@ -33,6 +33,8 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
   // Tracks die schon als "gespielt" automatisch markiert wurden — verhindert
   // doppelte Updates während ein langer Track läuft.
   const autoMarkedRef = useRef<Set<string>>(new Set());
+  // Letzter gesehener Track für Play-Tracking — bei jedem Wechsel: INSERT in event_plays
+  const lastSeenTrackRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -53,6 +55,32 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
         if (!data?.playing || !data?.track?.id) return;
 
         const currentSpotifyId = data.track.id as string;
+
+        // Play-Tracking: bei jedem Track-Wechsel → INSERT in event_plays.
+        // Damit haben wir eine vollstaendige History aller gespielten Songs
+        // (auch DJ-Playlist-Songs ohne Wunsch).
+        if (lastSeenTrackRef.current !== currentSpotifyId) {
+          lastSeenTrackRef.current = currentSpotifyId;
+          const matchingRequest = requests.find(
+            (r) =>
+              (r.status === "approved" || r.status === "played") &&
+              r.spotify_track_id === currentSpotifyId
+          );
+          const supabase = createClient();
+          supabase
+            .from("event_plays")
+            .insert({
+              event_id: eventId,
+              spotify_track_id: currentSpotifyId,
+              title: data.track.title,
+              artist: data.track.artist,
+              cover_url: data.track.cover_url,
+              source: matchingRequest ? "wish" : "auto",
+              request_id: matchingRequest?.id ?? null
+            })
+            .then(() => {});
+        }
+
         // Schon mal auto-marked? Skip.
         if (autoMarkedRef.current.has(currentSpotifyId)) return;
 

@@ -165,6 +165,25 @@ export default function AssistantClient() {
     }
   }
 
+  async function playNextTrack(track: Track) {
+    setQueueBusy(track.id);
+    try {
+      const res = await fetch("/api/spotify/play-next", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ spotify_track_id: track.id })
+      });
+      const data = await res.json();
+      setToast(
+        data.ok
+          ? { kind: "ok", text: `🚀 Als nächstes: ${track.title}` }
+          : { kind: "err", text: data.message ?? "Sofort-Spielen fehlgeschlagen" }
+      );
+    } finally {
+      setQueueBusy(null);
+    }
+  }
+
   const playing = nowPlaying?.playing === true && "track" in nowPlaying ? nowPlaying : null;
   const notPlayingReason =
     nowPlaying && !nowPlaying.playing ? (nowPlaying as { reason: string }).reason : null;
@@ -231,6 +250,7 @@ export default function AssistantClient() {
             <TrackList
               tracks={moreByArtist.tracks.slice(0, 5)}
               onQueue={queueTrack}
+              onPlayNext={playNextTrack}
               queueBusy={queueBusy}
             />
           )}
@@ -280,13 +300,23 @@ export default function AssistantClient() {
                     </p>
                     <p className="text-white/50 text-xs truncate">{track.artist}</p>
                   </div>
-                  <button
-                    onClick={() => queueTrack(track)}
-                    disabled={queueBusy === track.id}
-                    className="flex-shrink-0 px-3 py-1.5 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
-                  >
-                    {queueBusy === track.id ? "…" : "+ Queue"}
-                  </button>
+                  <div className="flex flex-col gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => queueTrack(track)}
+                      disabled={queueBusy === track.id}
+                      className="px-3 py-1 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
+                    >
+                      {queueBusy === track.id ? "…" : "+ Queue"}
+                    </button>
+                    <button
+                      onClick={() => playNextTrack(track)}
+                      disabled={queueBusy === track.id}
+                      className="px-3 py-1 rounded-full bg-orange-500 hover:bg-orange-400 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
+                      title="Direkt nach dem aktuellen Song spielen"
+                    >
+                      🚀 Sofort
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -352,13 +382,23 @@ export default function AssistantClient() {
                     {formatDuration(track.duration_ms)}
                   </p>
                 </div>
-                <button
-                  onClick={() => queueTrack(track)}
-                  disabled={queueBusy === track.id}
-                  className="flex-shrink-0 px-3 py-2 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
-                >
-                  {queueBusy === track.id ? "…" : "+ Queue"}
-                </button>
+                <div className="flex flex-col gap-1.5 flex-shrink-0">
+                  <button
+                    onClick={() => queueTrack(track)}
+                    disabled={queueBusy === track.id}
+                    className="px-3 py-1.5 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
+                  >
+                    {queueBusy === track.id ? "…" : "+ Queue"}
+                  </button>
+                  <button
+                    onClick={() => playNextTrack(track)}
+                    disabled={queueBusy === track.id}
+                    className="px-3 py-1.5 rounded-full bg-orange-500 hover:bg-orange-400 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
+                    title="Direkt nach dem aktuellen Song spielen"
+                  >
+                    🚀 Sofort
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -440,10 +480,12 @@ function NowPlayingCard({
 function TrackList({
   tracks,
   onQueue,
+  onPlayNext,
   queueBusy
 }: {
   tracks: Track[];
   onQueue: (t: Track) => void;
+  onPlayNext: (t: Track) => void;
   queueBusy: string | null;
 }) {
   return (
@@ -466,13 +508,23 @@ function TrackList({
             <p className="text-white font-semibold truncate text-sm">{track.title}</p>
             <p className="text-white/50 text-xs truncate">{track.album}</p>
           </div>
-          <button
-            onClick={() => onQueue(track)}
-            disabled={queueBusy === track.id}
-            className="flex-shrink-0 px-3 py-1.5 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
-          >
-            {queueBusy === track.id ? "…" : "+ Queue"}
-          </button>
+          <div className="flex flex-col gap-1.5 flex-shrink-0">
+            <button
+              onClick={() => onQueue(track)}
+              disabled={queueBusy === track.id}
+              className="px-3 py-1 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
+            >
+              {queueBusy === track.id ? "…" : "+ Queue"}
+            </button>
+            <button
+              onClick={() => onPlayNext(track)}
+              disabled={queueBusy === track.id}
+              className="px-3 py-1 rounded-full bg-orange-500 hover:bg-orange-400 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
+              title="Direkt nach dem aktuellen Song spielen"
+            >
+              🚀 Sofort
+            </button>
+          </div>
         </li>
       ))}
     </ul>

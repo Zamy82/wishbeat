@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
-import type { SongRequest } from "@/lib/types";
+import type { SongRequest, EventPlay } from "@/lib/types";
 
 interface Props {
   eventId: string;
   initialRequests: SongRequest[];
+  initialPlays: EventPlay[];
 }
 
 interface TrackStat {
@@ -15,47 +16,50 @@ interface TrackStat {
   title: string;
   artist: string;
   cover_url: string | null;
-  count: number;
-  played: number;
-  artistTotal: number; // wie oft der Künstler insgesamt gewünscht wurde
-  latestCreatedAt: string;
+  plays: number;
+  fromWish: number;
+  latestPlayedAt: string;
 }
 
 interface ArtistStat {
   name: string;
-  count: number;
+  plays: number;
 }
 
-export default function StatsPanel({ eventId, initialRequests }: Props) {
+export default function StatsPanel({
+  eventId,
+  initialRequests,
+  initialPlays
+}: Props) {
   const [requests, setRequests] = useState<SongRequest[]>(initialRequests);
+  const [plays, setPlays] = useState<EventPlay[]>(initialPlays);
 
-  // Realtime + Polling-Fallback.
-  // Realtime ist die primaere Quelle, aber falls die Subscription drop'pt
-  // (passiert nach langer Idle-Zeit), holen wir die Daten alle 8 Sekunden
-  // direkt nach. So sind die Stats nie mehr als 8 Sekunden veraltet.
+  // Realtime + Polling-Fallback für plays UND requests
   useEffect(() => {
     const supabase = createClient();
 
     async function refetchAll() {
-      const { data } = await supabase
-        .from("song_requests")
-        .select("*")
-        .eq("event_id", eventId)
-        .order("created_at", { ascending: true });
-      if (data) setRequests(data as SongRequest[]);
+      const [{ data: r }, { data: p }] = await Promise.all([
+        supabase
+          .from("song_requests")
+          .select("*")
+          .eq("event_id", eventId)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("event_plays")
+          .select("*")
+          .eq("event_id", eventId)
+          .order("played_at", { ascending: true })
+      ]);
+      if (r) setRequests(r as SongRequest[]);
+      if (p) setPlays(p as EventPlay[]);
     }
 
-    // Polling alle 8 Sekunden — pausiert wenn Tab inaktiv
     const pollId = setInterval(() => {
       if (document.visibilityState === "visible") refetchAll();
     }, 8000);
 
-    // Realtime als primaere Quelle fuer sofortige Updates.
-    // Channel-Name mit Random-Suffix, damit mehrere Subscriptions sich
-    // nicht aushebeln.
-    const channelName = `stats-${eventId}-${Math.random()
-      .toString(36)
-      .slice(2, 9)}`;
+    const channelName = `stats-${eventId}-${Math.random().toString(36).slice(2, 9)}`;
     const channel = supabase
       .channel(channelName)
       .on(
@@ -66,19 +70,17 @@ export default function StatsPanel({ eventId, initialRequests }: Props) {
           table: "song_requests",
           filter: `event_id=eq.${eventId}`
         },
-        (payload) => {
-          if (payload.eventType === "INSERT") {
-            setRequests((prev) => [...prev, payload.new as SongRequest]);
-          } else if (payload.eventType === "UPDATE") {
-            setRequests((prev) =>
-              prev.map((r) =>
-                r.id === payload.new.id ? (payload.new as SongRequest) : r
-              )
-            );
-          } else if (payload.eventType === "DELETE") {
-            setRequests((prev) => prev.filter((r) => r.id !== payload.old.id));
-          }
-        }
+        () => refetchAll()
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "event_plays",
+          filter: `event_id=eq.${eventId}`
+        },
+        () => refetchAll()
       )
       .subscribe();
 
@@ -88,14 +90,14 @@ export default function StatsPanel({ eventId, initialRequests }: Props) {
     };
   }, [eventId]);
 
-  const stats = useMemo(() => calculateStats(requests), [requests]);
+  const stats = useMemo(() => calculateStats(plays, requests), [plays, requests]);
 
-  if (requests.length === 0) {
+  if (plays.length === 0 && requests.length === 0) {
     return (
       <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
         <p className="text-white/40 text-sm">
-          Noch keine Daten. Sobald Gäste Wünsche schicken, erscheint hier die
-          Statistik.
+          Noch keine Daten. Sobald Songs gespielt werden oder Wünsche eingehen,
+          erscheint hier die Statistik.
         </p>
       </div>
     );
@@ -106,25 +108,27 @@ export default function StatsPanel({ eventId, initialRequests }: Props) {
       {/* KPI-Kacheln */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
-          label="Wünsche total"
-          value={stats.total}
-          accent="text-white"
+          label="Songs gespielt"
+          value={stats.totalPlays}
+          accent="text-neon-cyan"
+          subline={`${stats.uniqueTracks} eindeutig`}
         />
         <KpiCard
-          label="Angenommen"
-          value={stats.approved + stats.played}
-          accent="text-neon-cyan"
-          subline={`davon ${stats.played} gespielt`}
+          label="Wünsche"
+          value={stats.totalRequests}
+          accent="text-neon-pink"
+          subline={`${stats.wishesPlayed} erfüllt`}
         />
         <KpiCard
           label="Annahmequote"
           value={`${stats.acceptanceRate}%`}
-          accent="text-neon-pink"
+          accent="text-neon-purple"
         />
         <KpiCard
-          label="Eindeutige Songs"
-          value={stats.uniqueTracks}
-          accent="text-neon-purple"
+          label="Wunsch-Anteil"
+          value={`${stats.wishShare}%`}
+          accent="text-yellow-400"
+          subline="der gespielten Songs"
         />
       </div>
 
@@ -151,24 +155,22 @@ export default function StatsPanel({ eventId, initialRequests }: Props) {
               <p className="text-white font-bold text-lg truncate">
                 {stats.topTrack.title}
               </p>
-              <p className="text-white/70 text-sm truncate">
-                {stats.topTrack.artist}
-              </p>
+              <p className="text-white/70 text-sm truncate">{stats.topTrack.artist}</p>
               <p className="text-yellow-300 text-sm mt-1 font-semibold">
-                {stats.topTrack.count}× gewünscht
-                {stats.topTrack.played > 0 && ` · ${stats.topTrack.played}× gespielt`}
+                {stats.topTrack.plays}× gespielt
+                {stats.topTrack.fromWish > 0 && ` · ${stats.topTrack.fromWish}× aus Wunsch`}
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Top Songs + Top Künstler nebeneinander */}
+      {/* Top Songs + Top Künstler */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Songs */}
+        {/* Top Songs nach Plays */}
         <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
           <h3 className="text-xs uppercase tracking-widest text-white/40 font-semibold mb-3">
-            Top Songs
+            Meist gespielte Songs
           </h3>
           {stats.topTracks.length === 0 ? (
             <p className="text-white/40 text-sm">Noch keine Daten</p>
@@ -194,15 +196,15 @@ export default function StatsPanel({ eventId, initialRequests }: Props) {
                     </p>
                     <p className="text-white/40 text-xs truncate">
                       {t.artist}
-                      {t.artistTotal > 1 && (
+                      {t.fromWish > 0 && (
                         <span className="text-neon-pink/80 ml-1">
-                          · {t.artistTotal}× insgesamt
+                          · {t.fromWish}× Wunsch
                         </span>
                       )}
                     </p>
                   </div>
                   <span className="text-neon-cyan text-sm font-bold flex-shrink-0">
-                    {t.count}×
+                    {t.plays}×
                   </span>
                 </li>
               ))}
@@ -236,14 +238,14 @@ export default function StatsPanel({ eventId, initialRequests }: Props) {
                         style={{
                           width: `${
                             stats.topArtists[0]
-                              ? (a.count / stats.topArtists[0].count) * 100
+                              ? (a.plays / stats.topArtists[0].plays) * 100
                               : 0
                           }%`
                         }}
                       />
                     </div>
                     <span className="text-neon-pink text-sm font-bold">
-                      {a.count}×
+                      {a.plays}×
                     </span>
                   </div>
                 </li>
@@ -253,48 +255,46 @@ export default function StatsPanel({ eventId, initialRequests }: Props) {
         </div>
       </div>
 
-      {/* Status-Verteilung */}
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
-        <h3 className="text-xs uppercase tracking-widest text-white/40 font-semibold mb-3">
-          Status-Verteilung
-        </h3>
-        <div className="flex h-3 rounded-full overflow-hidden bg-white/5 mb-3">
-          {stats.played > 0 && (
-            <div
-              className="bg-neon-cyan/80"
-              style={{ width: `${(stats.played / stats.total) * 100}%` }}
-              title={`${stats.played} gespielt`}
-            />
-          )}
-          {stats.approved > 0 && (
-            <div
-              className="bg-neon-purple/80"
-              style={{ width: `${(stats.approved / stats.total) * 100}%` }}
-              title={`${stats.approved} in Queue`}
-            />
-          )}
-          {stats.pending > 0 && (
-            <div
-              className="bg-yellow-400/80"
-              style={{ width: `${(stats.pending / stats.total) * 100}%` }}
-              title={`${stats.pending} offen`}
-            />
-          )}
-          {stats.rejected > 0 && (
-            <div
-              className="bg-red-500/70"
-              style={{ width: `${(stats.rejected / stats.total) * 100}%` }}
-              title={`${stats.rejected} abgelehnt`}
-            />
-          )}
+      {/* Wunsch-Status-Verteilung */}
+      {stats.totalRequests > 0 && (
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+          <h3 className="text-xs uppercase tracking-widest text-white/40 font-semibold mb-3">
+            Wunsch-Status
+          </h3>
+          <div className="flex h-3 rounded-full overflow-hidden bg-white/5 mb-3">
+            {stats.played > 0 && (
+              <div
+                className="bg-neon-cyan/80"
+                style={{ width: `${(stats.played / stats.totalRequests) * 100}%` }}
+              />
+            )}
+            {stats.approved > 0 && (
+              <div
+                className="bg-neon-purple/80"
+                style={{ width: `${(stats.approved / stats.totalRequests) * 100}%` }}
+              />
+            )}
+            {stats.pending > 0 && (
+              <div
+                className="bg-yellow-400/80"
+                style={{ width: `${(stats.pending / stats.totalRequests) * 100}%` }}
+              />
+            )}
+            {stats.rejected > 0 && (
+              <div
+                className="bg-red-500/70"
+                style={{ width: `${(stats.rejected / stats.totalRequests) * 100}%` }}
+              />
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            <StatusItem color="bg-neon-cyan/80" label="Gespielt" count={stats.played} />
+            <StatusItem color="bg-neon-purple/80" label="In Queue" count={stats.approved} />
+            <StatusItem color="bg-yellow-400/80" label="Offen" count={stats.pending} />
+            <StatusItem color="bg-red-500/70" label="Abgelehnt" count={stats.rejected} />
+          </div>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-          <StatusItem color="bg-neon-cyan/80" label="Gespielt" count={stats.played} />
-          <StatusItem color="bg-neon-purple/80" label="In Queue" count={stats.approved} />
-          <StatusItem color="bg-yellow-400/80" label="Offen" count={stats.pending} />
-          <StatusItem color="bg-red-500/70" label="Abgelehnt" count={stats.rejected} />
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -340,85 +340,87 @@ function StatusItem({
 }
 
 interface Stats {
-  total: number;
+  totalPlays: number;
+  uniqueTracks: number;
+  totalRequests: number;
+  wishesPlayed: number;
+  wishShare: number;
+  acceptanceRate: number;
   played: number;
   approved: number;
   pending: number;
   rejected: number;
-  uniqueTracks: number;
-  acceptanceRate: number;
   topTrack: TrackStat | null;
   topTracks: TrackStat[];
   topArtists: ArtistStat[];
 }
 
-function calculateStats(requests: SongRequest[]): Stats {
-  const total = requests.length;
-  const played = requests.filter((r) => r.status === "played").length;
-  const approved = requests.filter((r) => r.status === "approved").length;
-  const pending = requests.filter((r) => r.status === "pending").length;
-  const rejected = requests.filter((r) => r.status === "rejected").length;
-
-  // Erst: Top Artists berechnen, brauchen wir für sekundäre Track-Sortierung
-  const artistMap = new Map<string, number>();
-  for (const r of requests) {
-    const primary = r.artist.split(",")[0]?.trim();
-    if (!primary) continue;
-    artistMap.set(primary, (artistMap.get(primary) ?? 0) + 1);
-  }
-  const topArtists = Array.from(artistMap.entries())
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
-
-  // Top Tracks: gruppiert nach spotify_track_id
+function calculateStats(plays: EventPlay[], requests: SongRequest[]): Stats {
+  // Plays gruppieren nach Track
   const trackMap = new Map<string, TrackStat>();
-  for (const r of requests) {
-    const primaryArtist = r.artist.split(",")[0]?.trim() ?? "";
-    const artistTotal = artistMap.get(primaryArtist) ?? 0;
-    const existing = trackMap.get(r.spotify_track_id);
+  for (const p of plays) {
+    const existing = trackMap.get(p.spotify_track_id);
     if (existing) {
-      existing.count++;
-      if (r.status === "played") existing.played++;
-      // Jüngster created_at gewinnt — damit "frischere" Wünsche bevorzugt werden
-      if (r.created_at > existing.latestCreatedAt) {
-        existing.latestCreatedAt = r.created_at;
+      existing.plays++;
+      if (p.source === "wish") existing.fromWish++;
+      if (p.played_at > existing.latestPlayedAt) {
+        existing.latestPlayedAt = p.played_at;
       }
     } else {
-      trackMap.set(r.spotify_track_id, {
-        id: r.spotify_track_id,
-        title: r.title,
-        artist: r.artist,
-        cover_url: r.cover_url,
-        count: 1,
-        played: r.status === "played" ? 1 : 0,
-        artistTotal,
-        latestCreatedAt: r.created_at
+      trackMap.set(p.spotify_track_id, {
+        id: p.spotify_track_id,
+        title: p.title,
+        artist: p.artist,
+        cover_url: p.cover_url,
+        plays: 1,
+        fromWish: p.source === "wish" ? 1 : 0,
+        latestPlayedAt: p.played_at
       });
     }
   }
 
-  // Multi-Level Sort:
-  // 1. Song-Häufigkeit (desc)
-  // 2. Künstler-Gesamthäufigkeit (desc) — Songs aktiver Künstler kommen vor
-  // 3. Datum (desc) — bei Gleichstand: neueste zuerst
   const allTracks = Array.from(trackMap.values()).sort((a, b) => {
-    if (b.count !== a.count) return b.count - a.count;
-    if (b.artistTotal !== a.artistTotal) return b.artistTotal - a.artistTotal;
-    return b.latestCreatedAt.localeCompare(a.latestCreatedAt);
+    if (b.plays !== a.plays) return b.plays - a.plays;
+    return b.latestPlayedAt.localeCompare(a.latestPlayedAt);
   });
 
+  // Top Artists
+  const artistMap = new Map<string, number>();
+  for (const p of plays) {
+    const primary = p.artist.split(",")[0]?.trim();
+    if (!primary) continue;
+    artistMap.set(primary, (artistMap.get(primary) ?? 0) + 1);
+  }
+  const topArtists = Array.from(artistMap.entries())
+    .map(([name, plays]) => ({ name, plays }))
+    .sort((a, b) => b.plays - a.plays)
+    .slice(0, 5);
+
+  // Wunsch-Stats
+  const totalRequests = requests.length;
+  const played = requests.filter((r) => r.status === "played").length;
+  const approved = requests.filter((r) => r.status === "approved").length;
+  const pending = requests.filter((r) => r.status === "pending").length;
+  const rejected = requests.filter((r) => r.status === "rejected").length;
   const acceptanceRate =
-    total > 0 ? Math.round(((approved + played) / total) * 100) : 0;
+    totalRequests > 0
+      ? Math.round(((approved + played) / totalRequests) * 100)
+      : 0;
+  const wishesPlayed = plays.filter((p) => p.source === "wish").length;
+  const wishShare =
+    plays.length > 0 ? Math.round((wishesPlayed / plays.length) * 100) : 0;
 
   return {
-    total,
+    totalPlays: plays.length,
+    uniqueTracks: trackMap.size,
+    totalRequests,
+    wishesPlayed,
+    wishShare,
+    acceptanceRate,
     played,
     approved,
     pending,
     rejected,
-    uniqueTracks: trackMap.size,
-    acceptanceRate,
     topTrack: allTracks[0] ?? null,
     topTracks: allTracks.slice(0, 5),
     topArtists

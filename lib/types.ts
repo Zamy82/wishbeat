@@ -51,3 +51,15 @@ export interface EventRating {
   nickname: string | null;
   created_at: string;
 }
+
+export interface EventPlay {
+  id: string;
+  event_id: string;
+  spotify_track_id: string;
+  title: string;
+  artist: string;
+  cover_url: string | null;
+  source: "wish" | "auto";
+  request_id: string | null;
+  played_at: string;
+}
