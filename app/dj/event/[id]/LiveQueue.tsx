@@ -288,6 +288,14 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
       }
       lastSeenTrackRef.current = tid;
       setToast({ kind: "ok", text: `Mitgeschrieben: ${np.track.title}` });
+
+      // Vibe sofort neu laden — kein 20-Sek-Warten
+      try {
+        const vRes = await fetch(`/api/events/${eventId}/vibe`, { cache: "no-store" });
+        const vData = await vRes.json();
+        setVibeTokens(vData.vibeTokens ?? {});
+        setVibePlayCount(vData.playCount ?? 0);
+      } catch {}
     } catch (e) {
       setToast({ kind: "err", text: `Fehler: ${(e as Error).message ?? "unbekannt"}` });
     }
