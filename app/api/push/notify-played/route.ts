@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
   // Request + Event laden
   const { data: req } = await admin
     .from("song_requests")
-    .select("id, event_id, spotify_track_id, title, artist, cover_url, requester_session_id, events!inner(owner_id, name)")
+    .select("id, event_id, spotify_track_id, title, artist, cover_url, requester_session_id, events!inner(owner_id, name, slug)")
     .eq("id", body.request_id)
     .single();
 
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Check: DJ ist Owner des Events
-  const eventOwner = (req.events as unknown as { owner_id: string; name: string });
+  const eventOwner = (req.events as unknown as { owner_id: string; name: string; slug: string });
   if (eventOwner.owner_id !== user.id) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
           icon: req.cover_url ?? undefined,
           image: req.cover_url ?? undefined,
           tag: `played-${req.spotify_track_id}`,
-          url: `/event/${eventOwner.name}` // wird gleich genauer
+          url: `/event/${eventOwner.slug}`
         }
       )
     )

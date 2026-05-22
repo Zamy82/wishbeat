@@ -31,6 +31,22 @@ export default function SongRequestForm({ eventId }: Props) {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Push-Status nach Submit: ok = wird benachrichtigt, oder Grund
+  const [pushStatus, setPushStatus] = useState<
+    { ok: true } | { ok: false; reason: string } | null
+  >(null);
+  // iOS Detection (kein Push ohne PWA-Install)
+  const [isIosNoPwa, setIsIosNoPwa] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ua = window.navigator.userAgent;
+    const isIos = /iPhone|iPad|iPod/i.test(ua);
+    interface NavWithStandalone extends Navigator { standalone?: boolean }
+    const isStandalone =
+      (window.navigator as NavWithStandalone).standalone === true ||
+      window.matchMedia("(display-mode: standalone)").matches;
+    setIsIosNoPwa(isIos && !isStandalone);
+  }, []);
 
   // Vibe-Match-Gimmick: zeigt wie gut der ausgewaehlte Song zum aktuellen
   // Vibe passt. "—" wenn noch keine Songs gespielt wurden.
@@ -153,9 +169,10 @@ export default function SongRequestForm({ eventId }: Props) {
 
     setSubmitted(true);
 
-    // Im Hintergrund: Service Worker + Push-Subscription anlegen.
-    // Fehler ignorieren — Wunsch ist abgespeichert, Push ist nur Bonus.
-    subscribeForEvent({ eventId, sessionId }).catch(() => {});
+    // Service Worker + Push-Subscription anlegen — Ergebnis sichtbar machen.
+    subscribeForEvent({ eventId, sessionId })
+      .then((r) => setPushStatus(r))
+      .catch(() => setPushStatus({ ok: false, reason: "exception" }));
 
     // Push-Notification an den DJ schicken (fire-and-forget)
     if (inserted?.id) {
@@ -179,6 +196,10 @@ export default function SongRequestForm({ eventId }: Props) {
             beim DJ.
           </p>
         )}
+
+        {/* Push-Status: zeigt klar ob Browser-Push aktiv ist */}
+        <PushStatusBox status={pushStatus} isIosNoPwa={isIosNoPwa} />
+
         <button
           onClick={() => {
             setSubmitted(false);
@@ -186,6 +207,7 @@ export default function SongRequestForm({ eventId }: Props) {
             setQuery("");
             setTracks([]);
             setNickname("");
+            setPushStatus(null);
           }}
           className="mt-4 px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm transition"
         >
@@ -299,6 +321,55 @@ export default function SongRequestForm({ eventId }: Props) {
 
       {error && (
         <p className="text-red-400 text-sm text-center">{error}</p>
+      )}
+    </div>
+  );
+}
+
+function PushStatusBox({
+  status,
+  isIosNoPwa
+}: {
+  status: { ok: true } | { ok: false; reason: string } | null;
+  isIosNoPwa: boolean;
+}) {
+  // Status noch nicht da
+  if (status === null) {
+    return (
+      <div className="rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-sm text-white/60">
+        🔔 Push wird eingerichtet…
+      </div>
+    );
+  }
+
+  if (status.ok) {
+    return (
+      <div className="rounded-2xl bg-green-500/10 border border-green-500/30 px-4 py-3 text-sm text-green-300">
+        🔔 <strong>Du wirst benachrichtigt</strong> sobald dein Song läuft — auch wenn du draußen bist oder die App geschlossen hast.
+      </div>
+    );
+  }
+
+  // Fehler-Erklaerung pro Reason
+  const explanations: Record<string, string> = {
+    unsupported: "Dein Browser unterstützt keine Push-Benachrichtigungen.",
+    denied: "Du hast Benachrichtigungen abgelehnt. Du kannst es in den Browser-Einstellungen wieder erlauben.",
+    no_vapid: "Push-System ist gerade nicht konfiguriert.",
+    sw_failed: "Service Worker konnte nicht starten.",
+    subscribe_failed: "Push-Anmeldung fehlgeschlagen.",
+    store_failed: "Konnte deine Anmeldung nicht speichern.",
+    exception: "Push-Anmeldung fehlgeschlagen."
+  };
+  const why = explanations[status.reason] ?? status.reason;
+
+  return (
+    <div className="rounded-2xl bg-yellow-500/10 border border-yellow-500/30 px-4 py-3 text-sm text-yellow-200 space-y-2">
+      <p>🔕 <strong>Keine Browser-Benachrichtigung aktiv.</strong></p>
+      <p className="text-yellow-200/70 text-xs">{why}</p>
+      {isIosNoPwa && (
+        <p className="text-yellow-100 text-xs border-t border-yellow-500/20 pt-2 mt-1">
+          📲 <strong>iPhone-Tipp:</strong> Tippe unten auf das Teilen-Symbol → <em>„Zum Home-Bildschirm hinzufügen"</em>. Dann öffne wishbeat von dort und sende deinen Wunsch — danach kommen auch echte Push-Nachrichten.
+        </p>
       )}
     </div>
   );
