@@ -6,6 +6,7 @@ import LiveQueue from "./LiveQueue";
 import EventControls from "./EventControls";
 import TaglineEditor from "./TaglineEditor";
 import RatingsPanel from "./RatingsPanel";
+import StatsPanel from "./StatsPanel";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -105,6 +106,11 @@ export default async function DjEventPage({ params }: Props) {
           </span>
         </h2>
         <LiveQueue eventId={id} initialRequests={requests ?? []} />
+      </section>
+
+      <section className="mt-10">
+        <h2 className="text-lg font-semibold text-white/80 mb-4">📊 Statistik</h2>
+        <StatsPanel requests={requests ?? []} />
       </section>
 
       <section className="mt-10">
