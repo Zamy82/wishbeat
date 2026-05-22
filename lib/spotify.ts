@@ -117,6 +117,65 @@ interface SpotifyApiTrack {
   id: string;
   name: string;
   duration_ms: number;
-  artists: { name: string }[];
+  artists: { id: string; name: string }[];
   album: { name: string; images: { url: string }[] };
+}
+
+// Genre-Lookup pro Artist — Spotify Artist-Endpoint liefert Genre-Tags.
+// Wir cachen aggressiv im Memory, da Artists sich quasi nie aendern.
+interface GenresCache {
+  genres: string[];
+  cachedAt: number;
+}
+const artistGenresCache = new Map<string, GenresCache>();
+const trackArtistCache = new Map<string, string[]>(); // trackId -> artistIds
+const GENRES_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+async function fetchArtistGenres(token: string, artistId: string): Promise<string[]> {
+  const cached = artistGenresCache.get(artistId);
+  if (cached && Date.now() - cached.cachedAt < GENRES_TTL_MS) {
+    return cached.genres;
+  }
+  const res = await fetch(`https://api.spotify.com/v1/artists/${artistId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    next: { revalidate: 3600 }
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  const genres = (data.genres ?? []) as string[];
+  artistGenresCache.set(artistId, { genres, cachedAt: Date.now() });
+  return genres;
+}
+
+// Holt die zusammengefassten Genre-Tags ALLER beteiligten Artists eines Tracks.
+// Wenn mehrere Artists: alle Genres deduppen.
+export async function getTrackArtistGenres(trackId: string): Promise<string[]> {
+  const token = await getAccessToken();
+
+  // 1) Artist-IDs des Tracks holen (cached pro Track)
+  let artistIds = trackArtistCache.get(trackId);
+  if (!artistIds) {
+    const trackRes = await fetch(`https://api.spotify.com/v1/tracks/${trackId}?market=DE`, {
+      headers: { Authorization: `Bearer ${token}` },
+      next: { revalidate: 3600 }
+    });
+    if (!trackRes.ok) return [];
+    const trackData = await trackRes.json();
+    artistIds = (trackData.artists ?? [])
+      .map((a: { id: string }) => a.id)
+      .filter(Boolean) as string[];
+    trackArtistCache.set(trackId, artistIds);
+  }
+
+  if (artistIds.length === 0) return [];
+
+  // 2) Genres aller Artists parallel holen + zusammenfassen
+  const allGenres = await Promise.all(
+    artistIds.map((id) => fetchArtistGenres(token, id))
+  );
+  const set = new Set<string>();
+  for (const list of allGenres) {
+    for (const g of list) set.add(g);
+  }
+  return Array.from(set);
 }

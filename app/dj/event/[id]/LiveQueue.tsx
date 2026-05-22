@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import type { SongRequest, RequestStatus } from "@/lib/types";
+import { matchPercent, matchTone } from "@/lib/vibe-match";
 
 const STATUS_LABEL: Record<RequestStatus, string> = {
   pending: "Offen",
@@ -40,11 +41,32 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
   // Letzter gesehener Track für Play-Tracking — bei jedem Wechsel: INSERT in event_plays
   const lastSeenTrackRef = useRef<string | null>(null);
 
+  // Vibe-State: aggregierte Genre-Woerter der letzten Plays
+  const [vibeTokens, setVibeTokens] = useState<Record<string, number>>({});
+  const [vibePlayCount, setVibePlayCount] = useState(0);
+
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 5000);
     return () => clearTimeout(t);
   }, [toast]);
+
+  // Vibe periodisch laden (alle 20s) — basiert auf letzten event_plays
+  useEffect(() => {
+    let cancelled = false;
+    async function loadVibe() {
+      try {
+        const res = await fetch(`/api/events/${eventId}/vibe`, { cache: "no-store" });
+        const data = await res.json();
+        if (cancelled) return;
+        setVibeTokens(data.vibeTokens ?? {});
+        setVibePlayCount(data.playCount ?? 0);
+      } catch {}
+    }
+    loadVibe();
+    const id = setInterval(loadVibe, 20000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [eventId]);
 
   // Auto-Mark-As-Played: pollt Spotify Now-Playing und matched gegen
   // angenommene Wünsche. Wenn der Track läuft -> setze status="played".
@@ -70,6 +92,22 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
               (r.status === "approved" || r.status === "played") &&
               r.spotify_track_id === currentSpotifyId
           );
+
+          // Genres: bei Wunsch direkt uebernehmen, sonst von Spotify holen
+          let genresForPlay: string[] | null = matchingRequest?.artist_genres ?? null;
+          if (!genresForPlay || genresForPlay.length === 0) {
+            try {
+              const gRes = await fetch(
+                `/api/spotify/track-genres?track_id=${currentSpotifyId}`,
+                { cache: "no-store" }
+              );
+              const gData = await gRes.json();
+              genresForPlay = (gData.genres ?? []) as string[];
+            } catch {
+              genresForPlay = [];
+            }
+          }
+
           const supabase = createClient();
           supabase
             .from("event_plays")
@@ -80,7 +118,8 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
               artist: data.track.artist,
               cover_url: data.track.cover_url,
               source: matchingRequest ? "wish" : "auto",
-              request_id: matchingRequest?.id ?? null
+              request_id: matchingRequest?.id ?? null,
+              artist_genres: genresForPlay
             })
             .then(() => {});
         }
@@ -233,7 +272,9 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
         const playedRequests = requests.filter((r) => r.status === "played");
         const rejectedRequests = requests.filter((r) => r.status === "rejected");
 
-        const renderItem = (req: SongRequest) => (
+        const renderItem = (req: SongRequest) => {
+          const matchResult = matchPercent(req.artist_genres, vibeTokens);
+          return (
           <li
             key={req.id}
             className={`rounded-2xl border border-white/10 bg-white/5 p-4 transition ${
@@ -259,11 +300,16 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
                   </p>
                 )}
               </div>
-              <span
-                className={`text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0 ${STATUS_STYLE[req.status]}`}
-              >
-                {STATUS_LABEL[req.status]}
-              </span>
+              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                <span
+                  className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_STYLE[req.status]}`}
+                >
+                  {STATUS_LABEL[req.status]}
+                </span>
+                {vibePlayCount >= 2 && matchResult && (req.status === "pending" || req.status === "approved") && (
+                  <MatchPill percent={matchResult.percent} />
+                )}
+              </div>
             </div>
 
             {/* Aktions-Buttons */}
@@ -323,6 +369,7 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
             </div>
           </li>
         );
+        };
 
         const noActiveOnly =
           activeRequests.length === 0 &&
@@ -413,5 +460,22 @@ function ActionButton({
     >
       {label}
     </button>
+  );
+}
+
+function MatchPill({ percent }: { percent: number }) {
+  const tone = matchTone(percent);
+  const palette = {
+    high: "bg-green-500/20 text-green-300 border-green-500/40",
+    mid: "bg-yellow-500/20 text-yellow-300 border-yellow-500/40",
+    low: "bg-red-500/20 text-red-300 border-red-500/40"
+  }[tone];
+  return (
+    <span
+      className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${palette}`}
+      title="Wie gut der Song zur aktuellen Stimmung (letzte 10 Plays) passt"
+    >
+      🎚 {percent}%
+    </span>
   );
 }

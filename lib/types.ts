@@ -22,6 +22,7 @@ export interface SongRequest {
   guest_nickname: string | null;
   status: RequestStatus;
   created_at: string;
+  artist_genres: string[] | null;
 }
 
 export interface SpotifyTrack {

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import type { SpotifyTrack } from "@/lib/types";
 import { getGuestSessionId } from "@/lib/guest-session";
 import { subscribeForEvent } from "@/lib/push-client";
+import { matchPercent, matchTone } from "@/lib/vibe-match";
 
 interface Props {
   eventId: string;
@@ -30,6 +31,48 @@ export default function SongRequestForm({ eventId }: Props) {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Vibe-Match-Gimmick: zeigt wie gut der ausgewaehlte Song zum aktuellen
+  // Vibe passt. "—" wenn noch keine Songs gespielt wurden.
+  const [selectedGenres, setSelectedGenres] = useState<string[] | null>(null);
+  const [vibeTokens, setVibeTokens] = useState<Record<string, number>>({});
+  const [vibePlayCount, setVibePlayCount] = useState(0);
+  const [vibeLoaded, setVibeLoaded] = useState(false);
+
+  // Vibe einmal beim Mount laden + alle 30s aktualisieren
+  useEffect(() => {
+    let cancelled = false;
+    async function loadVibe() {
+      try {
+        const res = await fetch(`/api/events/${eventId}/vibe`, { cache: "no-store" });
+        const data = await res.json();
+        if (cancelled) return;
+        setVibeTokens(data.vibeTokens ?? {});
+        setVibePlayCount(data.playCount ?? 0);
+        setVibeLoaded(true);
+      } catch {
+        if (!cancelled) setVibeLoaded(true);
+      }
+    }
+    loadVibe();
+    const id = setInterval(loadVibe, 30000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [eventId]);
+
+  // Wenn Track ausgewaehlt: Genres holen
+  useEffect(() => {
+    if (!selected) { setSelectedGenres(null); return; }
+    let cancelled = false;
+    fetch(`/api/spotify/track-genres?track_id=${selected.id}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => { if (!cancelled) setSelectedGenres(d.genres ?? []); })
+      .catch(() => { if (!cancelled) setSelectedGenres([]); });
+    return () => { cancelled = true; };
+  }, [selected]);
+
+  const match = selected && selectedGenres
+    ? matchPercent(selectedGenres, vibeTokens)
+    : null;
 
   const search = useCallback(async (q: string) => {
     if (q.length < 2) { setTracks([]); return; }
@@ -64,7 +107,8 @@ export default function SongRequestForm({ eventId }: Props) {
         cover_url: selected.cover_url,
         guest_nickname: nickname.trim() || null,
         requester_session_id: sessionId,
-        status: "pending"
+        status: "pending",
+        artist_genres: selectedGenres ?? null
       })
       .select("id")
       .single();
@@ -166,26 +210,38 @@ export default function SongRequestForm({ eventId }: Props) {
 
       {/* Ausgewählter Song */}
       {selected && (
-        <div className="flex items-center gap-3 rounded-2xl border border-neon-purple/50 bg-neon-purple/10 p-4">
-          {selected.cover_url && (
-            <Image
-              src={selected.cover_url}
-              alt={selected.album}
-              width={56}
-              height={56}
-              className="rounded-lg flex-shrink-0"
+        <div className="flex flex-col gap-2 rounded-2xl border border-neon-purple/50 bg-neon-purple/10 p-4">
+          <div className="flex items-center gap-3">
+            {selected.cover_url && (
+              <Image
+                src={selected.cover_url}
+                alt={selected.album}
+                width={56}
+                height={56}
+                className="rounded-lg flex-shrink-0"
+              />
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-semibold truncate">{selected.title}</p>
+              <p className="text-white/60 text-sm truncate">{selected.artist}</p>
+            </div>
+            <button
+              onClick={() => { setSelected(null); setQuery(""); }}
+              className="text-white/40 hover:text-white text-xl px-1"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Vibe-Match-Gimmick */}
+          {vibeLoaded && (
+            <VibeMatchBadge
+              loading={selectedGenres === null}
+              percent={match?.percent ?? null}
+              vibePlayCount={vibePlayCount}
+              genresKnown={(selectedGenres?.length ?? 0) > 0}
             />
           )}
-          <div className="flex-1 min-w-0">
-            <p className="text-white font-semibold truncate">{selected.title}</p>
-            <p className="text-white/60 text-sm truncate">{selected.artist}</p>
-          </div>
-          <button
-            onClick={() => { setSelected(null); setQuery(""); }}
-            className="text-white/40 hover:text-white text-xl px-1"
-          >
-            ✕
-          </button>
         </div>
       )}
 
@@ -213,6 +269,58 @@ export default function SongRequestForm({ eventId }: Props) {
       {error && (
         <p className="text-red-400 text-sm text-center">{error}</p>
       )}
+    </div>
+  );
+}
+
+function VibeMatchBadge({
+  loading,
+  percent,
+  vibePlayCount,
+  genresKnown
+}: {
+  loading: boolean;
+  percent: number | null;
+  vibePlayCount: number;
+  genresKnown: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="rounded-xl bg-white/5 px-3 py-2 text-xs text-white/40">
+        Vibe-Check läuft…
+      </div>
+    );
+  }
+  if (vibePlayCount < 2) {
+    return (
+      <div className="rounded-xl bg-white/5 px-3 py-2 text-xs text-white/50">
+        🎚 Vibe-Check: Noch zu wenige Songs gespielt — der Match-Score kommt sobald die Party läuft.
+      </div>
+    );
+  }
+  if (!genresKnown || percent === null) {
+    return (
+      <div className="rounded-xl bg-white/5 px-3 py-2 text-xs text-white/40">
+        🎚 Vibe-Check: Genre unbekannt
+      </div>
+    );
+  }
+  const tone = matchTone(percent);
+  const palette = {
+    high: "bg-green-500/15 text-green-300 border-green-500/30",
+    mid: "bg-yellow-500/15 text-yellow-300 border-yellow-500/30",
+    low: "bg-red-500/15 text-red-300 border-red-500/30"
+  }[tone];
+  const label = tone === "high"
+    ? "passt zum Vibe"
+    : tone === "mid"
+    ? "passt teilweise"
+    : "anderer Stil";
+  return (
+    <div className={`rounded-xl border ${palette} px-3 py-2 flex items-center justify-between gap-3 text-xs`}>
+      <span className="font-medium">🎚 Vibe-Match</span>
+      <span className="font-bold text-base">{percent}%</span>
+      <span className="opacity-80">{label}</span>
     </div>
   );
 }
