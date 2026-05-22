@@ -174,10 +174,14 @@ export default function AssistantClient() {
         body: JSON.stringify({ spotify_track_id: track.id })
       });
       const data = await res.json();
+      const okText =
+        data.mode === "queued_fallback"
+          ? `In Queue (am Ende): ${track.title}`
+          : `🔝 Als nächster: ${track.title}`;
       setToast(
         data.ok
-          ? { kind: "ok", text: `🚀 Läuft jetzt: ${track.title}` }
-          : { kind: "err", text: data.message ?? "Sofort-Spielen fehlgeschlagen" }
+          ? { kind: "ok", text: okText }
+          : { kind: "err", text: data.message ?? "Konnte Track nicht platzieren" }
       );
     } finally {
       setQueueBusy(null);
@@ -312,9 +316,9 @@ export default function AssistantClient() {
                       onClick={() => playNextTrack(track)}
                       disabled={queueBusy === track.id}
                       className="px-3 py-1 rounded-full bg-orange-500 hover:bg-orange-400 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
-                      title="Spielt SOFORT — aktueller Track wird unterbrochen, bisherige Queue bleibt dahinter erhalten"
+                      title="Als nächster Song nach dem aktuellen platzieren (Platz 1 in der Queue)"
                     >
-                      🚀 Sofort
+                      🔝 #1 in Queue
                     </button>
                   </div>
                 </li>
@@ -394,9 +398,9 @@ export default function AssistantClient() {
                     onClick={() => playNextTrack(track)}
                     disabled={queueBusy === track.id}
                     className="px-3 py-1.5 rounded-full bg-orange-500 hover:bg-orange-400 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
-                    title="Spielt SOFORT — aktueller Track wird unterbrochen, bisherige Queue bleibt dahinter erhalten"
+                    title="Als nächster Song nach dem aktuellen platzieren (Platz 1 in der Queue)"
                   >
-                    🚀 Sofort
+                    🔝 #1 in Queue
                   </button>
                 </div>
               </li>
@@ -520,9 +524,9 @@ function TrackList({
               onClick={() => onPlayNext(track)}
               disabled={queueBusy === track.id}
               className="px-3 py-1 rounded-full bg-orange-500 hover:bg-orange-400 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
-              title="Spielt SOFORT — aktueller Track wird unterbrochen, bisherige Queue bleibt dahinter erhalten"
+              title="Als nächster Song nach dem aktuellen platzieren (Platz 1 in der Queue)"
             >
-              🚀 Sofort
+              🔝 #1 in Queue
             </button>
           </div>
         </li>
