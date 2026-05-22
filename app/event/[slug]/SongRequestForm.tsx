@@ -322,10 +322,10 @@ function VibeMatchBadge({
       </div>
     );
   }
-  if (vibePlayCount < 2) {
+  if (vibePlayCount < 1) {
     return (
       <div className="rounded-xl bg-white/5 px-3 py-2 text-xs text-white/50">
-        🎚 Vibe-Check: Noch zu wenige Songs gespielt — der Match-Score kommt sobald die Party läuft.
+        🎚 Vibe-Check kommt, sobald die Party läuft.
       </div>
     );
   }

@@ -248,15 +248,11 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
     }
   }
 
-  if (requests.length === 0) {
-    return (
-      <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
-        <p className="text-white/40 text-sm">
-          Noch keine Wünsche. Gäste können jetzt über den QR-Code Songs wünschen.
-        </p>
-      </div>
-    );
-  }
+  // Top-5 Vibe-Woerter fuer die Anzeige
+  const topVibeWords = Object.entries(vibeTokens)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([word]) => word);
 
   return (
     <>
@@ -273,7 +269,40 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
         </div>
       )}
 
-      {(() => {
+      {/* Vibe-Status: zeigt woraus der Match-Score gerade gebildet wird */}
+      <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-xs">
+        {vibePlayCount === 0 ? (
+          <span className="text-white/40">
+            🎚 Vibe: Noch keine Songs getrackt — Spotify muss laufen + diese Seite offen sein.
+          </span>
+        ) : topVibeWords.length === 0 ? (
+          <span className="text-white/40">
+            🎚 Vibe: {vibePlayCount} Song(s) getrackt, aber Spotify hat keine Genre-Tags geliefert.
+          </span>
+        ) : (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-white/50">🎚 Aktueller Vibe ({vibePlayCount} Song{vibePlayCount > 1 ? "s" : ""}):</span>
+            {topVibeWords.map((word) => (
+              <span
+                key={word}
+                className="px-2 py-0.5 rounded-full bg-neon-purple/20 text-neon-purple/90 border border-neon-purple/30"
+              >
+                {word}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {requests.length === 0 && (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-10 text-center">
+          <p className="text-white/40 text-sm">
+            Noch keine Wünsche. Gäste können jetzt über den QR-Code Songs wünschen.
+          </p>
+        </div>
+      )}
+
+      {requests.length > 0 && (() => {
         const activeRequests = requests.filter(
           (r) => r.status === "pending" || r.status === "approved"
         );
@@ -314,7 +343,7 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
                 >
                   {STATUS_LABEL[req.status]}
                 </span>
-                {vibePlayCount >= 2 && matchResult && (req.status === "pending" || req.status === "approved") && (
+                {vibePlayCount >= 1 && matchResult && (req.status === "pending" || req.status === "approved") && (
                   <MatchPill percent={matchResult.percent} />
                 )}
               </div>
