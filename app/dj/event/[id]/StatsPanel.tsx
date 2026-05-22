@@ -1,11 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import { createClient } from "@/lib/supabase/client";
 import type { SongRequest } from "@/lib/types";
 
 interface Props {
-  requests: SongRequest[];
+  eventId: string;
+  initialRequests: SongRequest[];
 }
 
 interface TrackStat {
@@ -22,7 +24,44 @@ interface ArtistStat {
   count: number;
 }
 
-export default function StatsPanel({ requests }: Props) {
+export default function StatsPanel({ eventId, initialRequests }: Props) {
+  const [requests, setRequests] = useState<SongRequest[]>(initialRequests);
+
+  // Realtime-Subscription — Stats updaten sich automatisch bei neuen Wünschen
+  // oder Status-Wechseln (angenommen, gespielt, abgelehnt).
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`stats-${eventId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "song_requests",
+          filter: `event_id=eq.${eventId}`
+        },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            setRequests((prev) => [...prev, payload.new as SongRequest]);
+          } else if (payload.eventType === "UPDATE") {
+            setRequests((prev) =>
+              prev.map((r) =>
+                r.id === payload.new.id ? (payload.new as SongRequest) : r
+              )
+            );
+          } else if (payload.eventType === "DELETE") {
+            setRequests((prev) => prev.filter((r) => r.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [eventId]);
+
   const stats = useMemo(() => calculateStats(requests), [requests]);
 
   if (requests.length === 0) {

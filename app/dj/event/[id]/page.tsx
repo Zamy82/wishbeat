@@ -110,7 +110,7 @@ export default async function DjEventPage({ params }: Props) {
 
       <section className="mt-10">
         <h2 className="text-lg font-semibold text-white/80 mb-4">📊 Statistik</h2>
-        <StatsPanel requests={requests ?? []} />
+        <StatsPanel eventId={id} initialRequests={requests ?? []} />
       </section>
 
       <section className="mt-10">
