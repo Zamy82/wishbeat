@@ -444,12 +444,10 @@ function NowPlayingCard({
 function TrackList({
   tracks,
   onQueue,
-  onPlayNext,
   queueBusy
 }: {
   tracks: Track[];
   onQueue: (t: Track) => void;
-  onPlayNext: (t: Track) => void;
   queueBusy: string | null;
 }) {
   return (
@@ -472,23 +470,13 @@ function TrackList({
             <p className="text-white font-semibold truncate text-sm">{track.title}</p>
             <p className="text-white/50 text-xs truncate">{track.album}</p>
           </div>
-          <div className="flex flex-col gap-1.5 flex-shrink-0">
-            <button
-              onClick={() => onQueue(track)}
-              disabled={queueBusy === track.id}
-              className="px-3 py-1 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
-            >
-              {queueBusy === track.id ? "…" : "+ Queue"}
-            </button>
-            <button
-              onClick={() => onPlayNext(track)}
-              disabled={queueBusy === track.id}
-              className="px-3 py-1 rounded-full bg-orange-500 hover:bg-orange-400 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
-              title="Als nächster Song nach dem aktuellen platzieren (Platz 1 in der Queue)"
-            >
-              🔝 #1 in Queue
-            </button>
-          </div>
+          <button
+            onClick={() => onQueue(track)}
+            disabled={queueBusy === track.id}
+            className="flex-shrink-0 px-3 py-1.5 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
+          >
+            {queueBusy === track.id ? "…" : "+ Queue"}
+          </button>
         </li>
       ))}
     </ul>
