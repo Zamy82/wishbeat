@@ -57,6 +57,26 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     );
   }
 
+  // Dedup: wenn derselbe Track in den letzten 3 Min schon eingetragen
+  // wurde, NICHT erneut. Vermeidet Mehrfach-Inserts durch
+  // Hard-Refreshs / Doppelklicks waehrend desselben Songs.
+  const threeMinAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+  const { data: recent } = await supabase
+    .from("event_plays")
+    .select("id, played_at")
+    .eq("event_id", eventId)
+    .eq("spotify_track_id", body.spotify_track_id)
+    .gte("played_at", threeMinAgo)
+    .limit(1);
+  if (recent && recent.length > 0) {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: "already_tracked_recently",
+      existing_id: recent[0].id
+    });
+  }
+
   // Genres holen (cached)
   let genres: string[] = [];
   try {

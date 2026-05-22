@@ -268,10 +268,17 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
       }
 
       lastSeenTrackRef.current = np.track.id;
-      setToast({
-        kind: "ok",
-        text: `Mitgeschrieben: ${np.track.title} (${trackData.genresCount ?? 0} Genre-Tags)`
-      });
+      if (trackData.skipped) {
+        setToast({
+          kind: "ok",
+          text: `${np.track.title} läuft noch — wurde vor wenigen Minuten schon mitgeschrieben.`
+        });
+      } else {
+        setToast({
+          kind: "ok",
+          text: `Mitgeschrieben: ${np.track.title} (${trackData.genresCount ?? 0} Genre-Tags)`
+        });
+      }
 
       // Vibe sofort neu laden
       try {
