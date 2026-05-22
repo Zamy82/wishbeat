@@ -176,7 +176,7 @@ export default function AssistantClient() {
       const data = await res.json();
       setToast(
         data.ok
-          ? { kind: "ok", text: `🚀 Als nächstes: ${track.title}` }
+          ? { kind: "ok", text: `🚀 Läuft jetzt: ${track.title}` }
           : { kind: "err", text: data.message ?? "Sofort-Spielen fehlgeschlagen" }
       );
     } finally {
@@ -312,7 +312,7 @@ export default function AssistantClient() {
                       onClick={() => playNextTrack(track)}
                       disabled={queueBusy === track.id}
                       className="px-3 py-1 rounded-full bg-orange-500 hover:bg-orange-400 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
-                      title="Direkt nach dem aktuellen Song spielen"
+                      title="Spielt SOFORT — aktueller Track wird unterbrochen, bisherige Queue bleibt dahinter erhalten"
                     >
                       🚀 Sofort
                     </button>
@@ -394,7 +394,7 @@ export default function AssistantClient() {
                     onClick={() => playNextTrack(track)}
                     disabled={queueBusy === track.id}
                     className="px-3 py-1.5 rounded-full bg-orange-500 hover:bg-orange-400 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
-                    title="Direkt nach dem aktuellen Song spielen"
+                    title="Spielt SOFORT — aktueller Track wird unterbrochen, bisherige Queue bleibt dahinter erhalten"
                   >
                     🚀 Sofort
                   </button>
@@ -520,7 +520,7 @@ function TrackList({
               onClick={() => onPlayNext(track)}
               disabled={queueBusy === track.id}
               className="px-3 py-1 rounded-full bg-orange-500 hover:bg-orange-400 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
-              title="Direkt nach dem aktuellen Song spielen"
+              title="Spielt SOFORT — aktueller Track wird unterbrochen, bisherige Queue bleibt dahinter erhalten"
             >
               🚀 Sofort
             </button>
