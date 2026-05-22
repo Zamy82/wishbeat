@@ -355,19 +355,63 @@ interface Stats {
   topArtists: ArtistStat[];
 }
 
+// Songtitel normalisieren — Klammern, Suffixe wie "- Single Version", "- Remix",
+// "feat. XYZ" wegwerfen. So zaehlen "Baby" und "Baby - Album Version" als
+// selber Song.
+function normalizeTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/\s*[([].*?[)\]]\s*/g, " ")
+    .replace(/\s*-\s*(single|radio|album|extended|remix|version|edit|live|remastered|deluxe|mono|stereo|club\s*mix|mix)\b.*$/gi, "")
+    .replace(/\s+(feat\.?|ft\.?|featuring)\s+.*$/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Erster/primaerer Kuenstler, normalisiert
+function normalizeArtist(artist: string): string {
+  const primary = artist.split(/[,&]|\bfeat\.?\b|\bft\.?\b|\bfeaturing\b/i)[0] ?? "";
+  return primary.toLowerCase().trim();
+}
+
+// Plays mit gleichem Titel/Kuenstler innerhalb 15 Min werden als 1 Play
+// gezaehlt — verhindert dass verschiedene Spotify-Track-IDs derselben Songs
+// (Album, Single, Remix etc.) doppelt gezaehlt werden.
+const STATS_DEDUP_WINDOW_MS = 15 * 60 * 1000;
+
 function calculateStats(plays: EventPlay[], requests: SongRequest[]): Stats {
-  // Plays gruppieren nach Track
+  // Sortiere chronologisch + filtere nahe Duplikate
+  const sorted = [...plays].sort((a, b) => a.played_at.localeCompare(b.played_at));
+  const seenByKey = new Map<string, number>();
+  const dedupedPlays: EventPlay[] = [];
+  for (const p of sorted) {
+    const key = `${normalizeTitle(p.title)}|${normalizeArtist(p.artist)}`;
+    const t = new Date(p.played_at).getTime();
+    const last = seenByKey.get(key);
+    if (last !== undefined && t - last < STATS_DEDUP_WINDOW_MS) {
+      continue;
+    }
+    seenByKey.set(key, t);
+    dedupedPlays.push(p);
+  }
+
+  // Plays gruppieren — Key ist normalisierter Titel+Kuenstler
   const trackMap = new Map<string, TrackStat>();
-  for (const p of plays) {
-    const existing = trackMap.get(p.spotify_track_id);
+  for (const p of dedupedPlays) {
+    const key = `${normalizeTitle(p.title)}|${normalizeArtist(p.artist)}`;
+    const existing = trackMap.get(key);
     if (existing) {
       existing.plays++;
       if (p.source === "wish") existing.fromWish++;
       if (p.played_at > existing.latestPlayedAt) {
         existing.latestPlayedAt = p.played_at;
       }
+      // Wenn ersteSeen kein Cover hatte, spaeteres uebernehmen
+      if (!existing.cover_url && p.cover_url) {
+        existing.cover_url = p.cover_url;
+      }
     } else {
-      trackMap.set(p.spotify_track_id, {
+      trackMap.set(key, {
         id: p.spotify_track_id,
         title: p.title,
         artist: p.artist,
@@ -384,15 +428,21 @@ function calculateStats(plays: EventPlay[], requests: SongRequest[]): Stats {
     return b.latestPlayedAt.localeCompare(a.latestPlayedAt);
   });
 
-  // Top Artists
-  const artistMap = new Map<string, number>();
-  for (const p of plays) {
-    const primary = p.artist.split(",")[0]?.trim();
+  // Top Artists — Basis sind die deduplizierten Plays, primaerer Kuenstler.
+  // Behalte original-Display-Schreibweise vom ersten Auftreten.
+  const artistMap = new Map<string, { name: string; plays: number }>();
+  for (const p of dedupedPlays) {
+    const primary = p.artist.split(/[,&]|\bfeat\.?\b|\bft\.?\b|\bfeaturing\b/i)[0]?.trim();
     if (!primary) continue;
-    artistMap.set(primary, (artistMap.get(primary) ?? 0) + 1);
+    const normKey = primary.toLowerCase();
+    const existing = artistMap.get(normKey);
+    if (existing) {
+      existing.plays++;
+    } else {
+      artistMap.set(normKey, { name: primary, plays: 1 });
+    }
   }
-  const topArtists = Array.from(artistMap.entries())
-    .map(([name, plays]) => ({ name, plays }))
+  const topArtists = Array.from(artistMap.values())
     .sort((a, b) => b.plays - a.plays)
     .slice(0, 5);
 
@@ -406,12 +456,13 @@ function calculateStats(plays: EventPlay[], requests: SongRequest[]): Stats {
     totalRequests > 0
       ? Math.round(((approved + played) / totalRequests) * 100)
       : 0;
-  const wishesPlayed = plays.filter((p) => p.source === "wish").length;
+  // Wunsch-Anteil basiert auf deduplizierten Plays — sonst inkonsistent
+  const wishesPlayed = dedupedPlays.filter((p) => p.source === "wish").length;
   const wishShare =
-    plays.length > 0 ? Math.round((wishesPlayed / plays.length) * 100) : 0;
+    dedupedPlays.length > 0 ? Math.round((wishesPlayed / dedupedPlays.length) * 100) : 0;
 
   return {
-    totalPlays: plays.length,
+    totalPlays: dedupedPlays.length,
     uniqueTracks: trackMap.size,
     totalRequests,
     wishesPlayed,
