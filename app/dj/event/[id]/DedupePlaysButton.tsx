@@ -24,16 +24,16 @@ export default function DedupePlaysButton({ eventId }: Props) {
       if (!data.ok) {
         setMsg(`Fehler: ${data.message ?? "unbekannt"}`);
       } else if (data.removed === 0) {
-        setMsg("Keine Duplikate gefunden — Statistik ist sauber.");
+        setMsg("Statistik ist bereits sauber — keine Duplikate.");
       } else {
-        setMsg(`${data.removed} Doppel-Plays entfernt (${data.kept} behalten).`);
+        setMsg(`✓ ${data.removed} Duplikate entfernt — ${data.uniqueSongs ?? data.kept} verschiedene Songs übrig.`);
         router.refresh();
       }
     } catch {
       setMsg("Netzwerk-Fehler.");
     } finally {
       setBusy(false);
-      setTimeout(() => setMsg(null), 6000);
+      setTimeout(() => setMsg(null), 10000);
     }
   }
 

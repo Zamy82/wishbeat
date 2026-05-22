@@ -1,29 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 
-// Loescht doppelte event_plays-Eintraege fuer ein Event.
-// Definition Duplikat: gleicher spotify_track_id innerhalb 60 Minuten.
-// Behaelt den AELTESTEN Eintrag pro Gruppe.
-// 60 Min ist gross genug um Test-Phasen-Duplikate zu fangen, klein genug
-// damit legitime Wiederholungen im Lauf eines langen Abends erhalten bleiben.
+// Loescht ALLE doppelten event_plays-Eintraege fuer ein Event.
+// Behaelt den AELTESTEN Eintrag pro spotify_track_id, loescht alle anderen.
+// Drastisch — aber genau das was wir brauchen um Testphasen-Muell zu entfernen.
+// Im echten Betrieb verhindert bereits die track-play Dedupe (3-Min-Window)
+// neue Duplikate, deshalb hier kein Praxis-Verlust.
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-const WINDOW_MS = 60 * 60 * 1000;
+function adminClient() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+}
 
 export async function POST(_req: NextRequest, ctx: RouteContext) {
   const { id: eventId } = await ctx.params;
-  const supabase = await createClient();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // Ownership-Check ueber User-Session
+  const userSupabase = await createClient();
+  const { data: { user } } = await userSupabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ ok: false, message: "Nicht eingeloggt." }, { status: 401 });
   }
-
-  // Ownership check
-  const { data: event } = await supabase
+  const { data: event } = await userSupabase
     .from("events")
     .select("id, owner_id")
     .eq("id", eventId)
@@ -35,6 +41,9 @@ export async function POST(_req: NextRequest, ctx: RouteContext) {
       { status: 404 }
     );
   }
+
+  // Ab hier mit Service-Role: garantiert kein RLS-Stolperdraht beim Delete
+  const supabase = adminClient();
 
   // Alle Plays holen, sortiert nach Zeit aufsteigend
   const { data: plays, error: readError } = await supabase
@@ -50,20 +59,14 @@ export async function POST(_req: NextRequest, ctx: RouteContext) {
     );
   }
 
-  // Pro Track: merken wann zuletzt gesehen. Wenn neuer Eintrag innerhalb
-  // WINDOW_MS nach dem letzten kommt — fuer Loeschung markieren.
-  const lastSeenAt = new Map<string, number>();
+  // Pro spotify_track_id: ersten Eintrag behalten, alle weiteren loeschen.
+  const seen = new Set<string>();
   const toDelete: string[] = [];
   for (const p of plays ?? []) {
-    const t = new Date(p.played_at).getTime();
-    const last = lastSeenAt.get(p.spotify_track_id);
-    if (last !== undefined && t - last < WINDOW_MS) {
+    if (seen.has(p.spotify_track_id)) {
       toDelete.push(p.id);
-      // last NICHT updaten — wir wollen alle nahen Duplikate gegen das
-      // urspruengliche Original messen (sonst kann sich das Fenster
-      // ueber Stunden wandern bei Songs die mehrfach laufen)
     } else {
-      lastSeenAt.set(p.spotify_track_id, t);
+      seen.add(p.spotify_track_id);
     }
   }
 
@@ -71,9 +74,9 @@ export async function POST(_req: NextRequest, ctx: RouteContext) {
     return NextResponse.json({ ok: true, removed: 0, kept: plays?.length ?? 0 });
   }
 
-  const { error: delError } = await supabase
+  const { error: delError, count } = await supabase
     .from("event_plays")
-    .delete()
+    .delete({ count: "exact" })
     .in("id", toDelete);
 
   if (delError) {
@@ -85,7 +88,8 @@ export async function POST(_req: NextRequest, ctx: RouteContext) {
 
   return NextResponse.json({
     ok: true,
-    removed: toDelete.length,
-    kept: (plays?.length ?? 0) - toDelete.length
+    removed: count ?? toDelete.length,
+    kept: (plays?.length ?? 0) - toDelete.length,
+    uniqueSongs: seen.size
   });
 }
