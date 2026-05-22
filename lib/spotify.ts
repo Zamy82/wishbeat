@@ -121,34 +121,80 @@ interface SpotifyApiTrack {
   album: { name: string; images: { url: string }[] };
 }
 
-// Genre-Lookup pro Artist — Spotify Artist-Endpoint liefert Genre-Tags.
-// Wir cachen aggressiv im Memory, da Artists sich quasi nie aendern.
+// Genre-Lookup pro Artist.
+// Spotify liefert seit 2024/2025 keine Genre-Tags mehr fuer
+// Client-Credentials-Apps (Feld einfach weg aus dem Response).
+// Wir benutzen daher MusicBrainz — kostenlose offene Musikdatenbank
+// mit reichhaltigen Tags pro Artist. Kein API-Key noetig, nur ein
+// sauberer User-Agent.
 interface GenresCache {
   genres: string[];
   cachedAt: number;
 }
+// Cache pro Artist-Name (lowercase) — Spotify-Artist-IDs sind irrelevant
+// fuer MusicBrainz, wir suchen ueber Namen.
 const artistGenresCache = new Map<string, GenresCache>();
-const trackArtistCache = new Map<string, string[]>(); // trackId -> artistIds
+const trackArtistCache = new Map<string, { id: string; name: string }[]>();
 const GENRES_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
-async function fetchArtistGenres(token: string, artistId: string): Promise<string[]> {
-  const cached = artistGenresCache.get(artistId);
+const MB_USER_AGENT = "wishbeat/1.0 (https://wishbeat-zamy82-s-projects.vercel.app)";
+
+interface MBTag { name: string; count: number }
+interface MBArtist { id: string; tags?: MBTag[]; genres?: MBTag[] }
+
+async function fetchArtistGenresFromMusicBrainz(artistName: string): Promise<string[]> {
+  const cacheKey = artistName.toLowerCase().trim();
+  const cached = artistGenresCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < GENRES_TTL_MS) {
     return cached.genres;
   }
-  const res = await fetch(`https://api.spotify.com/v1/artists/${artistId}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    next: { revalidate: 3600 }
-  });
-  if (!res.ok) return [];
-  const data = await res.json();
-  const genres = (data.genres ?? []) as string[];
-  artistGenresCache.set(artistId, { genres, cachedAt: Date.now() });
-  return genres;
+
+  try {
+    // Schritt 1: Artist suchen — Phrase-Search mit Quotes fuer exakten Match
+    const searchUrl = new URL("https://musicbrainz.org/ws/2/artist/");
+    searchUrl.searchParams.set("query", `artist:"${artistName}"`);
+    searchUrl.searchParams.set("fmt", "json");
+    searchUrl.searchParams.set("limit", "3");
+    const searchRes = await fetch(searchUrl.toString(), {
+      headers: { "User-Agent": MB_USER_AGENT, Accept: "application/json" },
+      next: { revalidate: 86400 }
+    });
+    if (!searchRes.ok) {
+      artistGenresCache.set(cacheKey, { genres: [], cachedAt: Date.now() });
+      return [];
+    }
+    const sData = (await searchRes.json()) as { artists?: MBArtist[] };
+    const topMbid = sData.artists?.[0]?.id;
+    if (!topMbid) {
+      artistGenresCache.set(cacheKey, { genres: [], cachedAt: Date.now() });
+      return [];
+    }
+
+    // Schritt 2: Tags + Genres holen
+    const lookupUrl = `https://musicbrainz.org/ws/2/artist/${topMbid}?inc=tags+genres&fmt=json`;
+    const lookupRes = await fetch(lookupUrl, {
+      headers: { "User-Agent": MB_USER_AGENT, Accept: "application/json" },
+      next: { revalidate: 86400 }
+    });
+    if (!lookupRes.ok) {
+      artistGenresCache.set(cacheKey, { genres: [], cachedAt: Date.now() });
+      return [];
+    }
+    const lData = (await lookupRes.json()) as MBArtist;
+    const tags = [
+      ...(lData.tags ?? []).map((t) => t.name),
+      ...(lData.genres ?? []).map((g) => g.name)
+    ];
+    const unique = Array.from(new Set(tags.map((t) => t.toLowerCase().trim()))).filter(Boolean);
+    artistGenresCache.set(cacheKey, { genres: unique, cachedAt: Date.now() });
+    return unique;
+  } catch {
+    artistGenresCache.set(cacheKey, { genres: [], cachedAt: Date.now() });
+    return [];
+  }
 }
 
-// Debug: gibt das rohe Spotify-Track + Artist-Response zurueck.
-// Dient nur zum Diagnose-Endpoint, NICHT fuer Produktiv-Code.
+// Debug: zeigt was Spotify + MusicBrainz fuer einen Track liefern.
 export async function debugTrackArtists(trackId: string) {
   const token = await getAccessToken();
   const trackRes = await fetch(`https://api.spotify.com/v1/tracks/${trackId}?market=DE`, {
@@ -167,19 +213,31 @@ export async function debugTrackArtists(trackId: string) {
   const artists = td.artists ?? [];
   const artistsDetail = await Promise.all(
     artists.map(async (a) => {
-      const r = await fetch(`https://api.spotify.com/v1/artists/${a.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
+      // MusicBrainz Search + Lookup
+      const sUrl = new URL("https://musicbrainz.org/ws/2/artist/");
+      sUrl.searchParams.set("query", `artist:"${a.name}"`);
+      sUrl.searchParams.set("fmt", "json");
+      sUrl.searchParams.set("limit", "3");
+      const sRes = await fetch(sUrl.toString(), {
+        headers: { "User-Agent": MB_USER_AGENT, Accept: "application/json" },
         cache: "no-store"
       });
-      let body: unknown = null;
-      try { body = r.ok ? await r.json() : await r.text(); } catch {}
+      const sData = sRes.ok ? (await sRes.json()) as { artists?: { id: string; name: string; score: number }[] } : null;
+      const top = sData?.artists?.[0];
+
+      let lookup: unknown = null;
+      if (top?.id) {
+        const lRes = await fetch(
+          `https://musicbrainz.org/ws/2/artist/${top.id}?inc=tags+genres&fmt=json`,
+          { headers: { "User-Agent": MB_USER_AGENT, Accept: "application/json" }, cache: "no-store" }
+        );
+        lookup = lRes.ok ? await lRes.json() : await lRes.text();
+      }
       return {
-        id: a.id,
+        spotifyId: a.id,
         name: a.name,
-        status: r.status,
-        bodyKeys: r.ok && body && typeof body === "object" ? Object.keys(body as object) : null,
-        genres: r.ok ? (body as { genres?: string[] })?.genres ?? null : null,
-        body
+        mbSearch: { status: sRes.status, topMatch: top },
+        mbLookup: lookup
       };
     })
   );
@@ -187,37 +245,35 @@ export async function debugTrackArtists(trackId: string) {
   return {
     trackStatus,
     trackName: td.name ?? null,
-    trackArtists: artists.map((a) => ({ id: a.id, name: a.name })),
-    artistsDetail,
-    tokenPrefix: token.substring(0, 8) + "..."
+    artistsDetail
   };
 }
 
 // Holt die zusammengefassten Genre-Tags ALLER beteiligten Artists eines Tracks.
-// Wenn mehrere Artists: alle Genres deduppen.
+// Spotify liefert die Artist-Namen, MusicBrainz die Tags.
 export async function getTrackArtistGenres(trackId: string): Promise<string[]> {
   const token = await getAccessToken();
 
-  // 1) Artist-IDs des Tracks holen (cached pro Track)
-  let artistIds = trackArtistCache.get(trackId);
-  if (!artistIds) {
+  // 1) Artist-Namen des Tracks holen (cached pro Track)
+  let artists = trackArtistCache.get(trackId);
+  if (!artists) {
     const trackRes = await fetch(`https://api.spotify.com/v1/tracks/${trackId}?market=DE`, {
       headers: { Authorization: `Bearer ${token}` },
       next: { revalidate: 3600 }
     });
     if (!trackRes.ok) return [];
     const trackData = await trackRes.json();
-    artistIds = (trackData.artists ?? [])
-      .map((a: { id: string }) => a.id)
-      .filter(Boolean) as string[];
-    trackArtistCache.set(trackId, artistIds);
+    artists = (trackData.artists ?? [])
+      .map((a: { id: string; name: string }) => ({ id: a.id, name: a.name }))
+      .filter((a: { id: string; name: string }) => a.id && a.name) as { id: string; name: string }[];
+    trackArtistCache.set(trackId, artists);
   }
 
-  if (artistIds.length === 0) return [];
+  if (artists.length === 0) return [];
 
-  // 2) Genres aller Artists parallel holen + zusammenfassen
+  // 2) Genres aller Artists parallel von MusicBrainz holen
   const allGenres = await Promise.all(
-    artistIds.map((id) => fetchArtistGenres(token, id))
+    artists.map((a) => fetchArtistGenresFromMusicBrainz(a.name))
   );
   const set = new Set<string>();
   for (const list of allGenres) {
