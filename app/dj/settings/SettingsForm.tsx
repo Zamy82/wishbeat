@@ -146,24 +146,40 @@ export default function SettingsForm({ initialProfile, userEmail }: Props) {
         </div>
       </fieldset>
 
-      {/* PayPal (deaktiviert für jetzt) */}
-      <fieldset className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 opacity-60">
+      {/* PayPal */}
+      <fieldset className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
         <legend className="px-3 text-white/60 text-xs uppercase tracking-widest">
-          Trinkgeld — PayPal (kommt bald)
+          Geschenk — PayPal.me
         </legend>
-        <p className="text-white/40 text-xs mt-2 mb-3">
-          PayPal-Username — z.B. <code>zamy82</code> für{" "}
-          <code>paypal.me/zamy82</code>. Trag's ein wenn deine PayPal-Einstellungen
-          fertig sind.
+        <p className="text-white/40 text-xs mt-2 mb-2">
+          PayPal-Username für deinen{" "}
+          <code className="text-white/60">paypal.me/USER</code>-Link.
+        </p>
+        <p className="text-white/30 text-xs mb-4 leading-relaxed">
+          💡 Bei PayPal &bdquo;Friends &amp; Family&ldquo; einstellen — dann sind
+          beide Seiten gebührenfrei, gilt rechtlich als private Schenkung.
         </p>
         <input
           type="text"
           value={paypal}
-          onChange={(e) => setPaypal(e.target.value)}
+          onChange={(e) => setPaypal(e.target.value.replace(/^@/, "").trim())}
           maxLength={50}
-          placeholder="z.B. zamy82"
+          placeholder="z.B. ZamyAhmad (ohne @)"
           className="w-full rounded-2xl bg-white/10 border border-white/20 px-5 py-4 text-white placeholder:text-white/40 focus:outline-none focus:border-neon-purple transition"
         />
+        {paypal && (
+          <p className="text-white/40 text-xs mt-2">
+            Vorschau:{" "}
+            <a
+              href={`https://paypal.me/${paypal}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-neon-cyan hover:underline"
+            >
+              paypal.me/{paypal}
+            </a>
+          </p>
+        )}
       </fieldset>
 
       {/* Save */}

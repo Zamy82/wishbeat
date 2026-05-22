@@ -23,16 +23,18 @@ export default async function EventPage({ params }: Props) {
   // DJ-Profil laden (für Trinkgeld) — RLS-Policy erlaubt das für aktive Events
   const { data: djProfile } = await supabase
     .from("dj_profiles")
-    .select("display_name, iban_holder, iban, bic")
+    .select("display_name, iban_holder, iban, bic, paypal_handle")
     .eq("user_id", event.owner_id)
     .maybeSingle();
 
-  const canTip = !!(
+  const hasBank = !!(
     djProfile?.iban &&
     djProfile?.iban_holder &&
     djProfile.iban.length > 0 &&
     djProfile.iban_holder.length > 0
   );
+  const hasPaypal = !!(djProfile?.paypal_handle && djProfile.paypal_handle.length > 0);
+  const canTip = hasBank || hasPaypal;
 
   const djDisplayName =
     djProfile?.display_name?.trim() ||
@@ -75,14 +77,17 @@ export default async function EventPage({ params }: Props) {
       {/* Bewertung — auch bei beendeten Events erlaubt (Feedback nachträglich) */}
       <RatingSection eventId={event.id} eventName={event.name} />
 
-      {/* Trinkgeld — nur wenn DJ seine IBAN eingetragen hat */}
+      {/* Trinkgeld — wenn DJ IBAN oder PayPal eingetragen hat */}
       {canTip && djProfile && (
         <TipSection
           djDisplayName={djDisplayName}
-          ibanHolder={djProfile.iban_holder!}
-          iban={djProfile.iban!}
+          ibanHolder={djProfile.iban_holder ?? ""}
+          iban={djProfile.iban ?? ""}
           bic={djProfile.bic}
+          paypalHandle={djProfile.paypal_handle}
           eventName={event.name}
+          hasBank={hasBank}
+          hasPaypal={hasPaypal}
         />
       )}
     </main>
