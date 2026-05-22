@@ -228,12 +228,18 @@ export default function TipSection({
             </a>
             <p className="text-white/50 text-xs mt-3 text-center">
               Öffnet <code className="text-white/70">paypal.me/{paypalHandle}</code>
-              {" "}in der PayPal-App oder im Browser
+              {" "}in der PayPal-App
             </p>
-            <p className="text-white/30 text-xs mt-1 text-center">
-              💡 Tipp: Bei „Senden an Freunde &amp; Familie" wählen — keine
-              Gebühren
-            </p>
+            <div className="mt-3 rounded-xl bg-yellow-400/10 border border-yellow-400/30 p-3 text-xs">
+              <p className="text-yellow-300 font-semibold mb-1">
+                ⚠️ Wichtig im PayPal-Dialog:
+              </p>
+              <p className="text-white/80 leading-relaxed">
+                Wähle <strong>&bdquo;An Freunde oder Familie senden&ldquo;</strong>{" "}
+                (nicht „Für Waren/Dienstleistungen"). Sonst fallen 2,5% Gebühren
+                an — bei einer privaten Schenkung gibt&apos;s das nicht.
+              </p>
+            </div>
           </div>
         )}
       </div>
