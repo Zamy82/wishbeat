@@ -75,11 +75,13 @@ export default function SongRequestForm({ eventId }: Props) {
     return () => { cancelled = true; clearInterval(id); };
   }, [eventId]);
 
-  // Wenn Track ausgewaehlt: Genres holen
+  // Wenn Track ausgewaehlt: Genres holen — Artist direkt mitgeben,
+  // damit der Server nicht erst Spotify nach dem Artist fragen muss.
   useEffect(() => {
     if (!selected) { setSelectedGenres(null); return; }
     let cancelled = false;
-    fetch(`/api/spotify/track-genres?track_id=${selected.id}`, { cache: "no-store" })
+    const url = `/api/spotify/track-genres?artist=${encodeURIComponent(selected.artist)}&track_id=${selected.id}`;
+    fetch(url, { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => { if (!cancelled) setSelectedGenres(d.genres ?? []); })
       .catch(() => { if (!cancelled) setSelectedGenres([]); });

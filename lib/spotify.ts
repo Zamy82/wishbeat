@@ -249,8 +249,23 @@ export async function debugTrackArtists(trackId: string) {
   };
 }
 
+// Direkter Weg: Genre-Tags fuer einen Kuenstler-Namen (ohne Spotify).
+// Wird verwendet wenn der Kuenstler-Name schon bekannt ist (z. B. aus
+// song_requests / event_plays). Spart einen Spotify-API-Call und vermeidet
+// Rate-Limits.
+export async function getGenresByArtistName(artistName: string): Promise<string[]> {
+  if (!artistName) return [];
+  // Nur primaerer Kuenstler (vor Komma/&/feat)
+  const primary = artistName
+    .split(/[,&]|\bfeat\.?\b|\bft\.?\b|\bfeaturing\b/i)[0]
+    ?.trim();
+  if (!primary) return [];
+  return fetchArtistGenresFromMusicBrainz(primary);
+}
+
 // Holt die zusammengefassten Genre-Tags ALLER beteiligten Artists eines Tracks.
 // Spotify liefert die Artist-Namen, MusicBrainz die Tags.
+// Wird nur noch als Fallback genutzt — wo es geht, getGenresByArtistName.
 export async function getTrackArtistGenres(trackId: string): Promise<string[]> {
   const token = await getAccessToken();
 
