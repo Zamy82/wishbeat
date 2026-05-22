@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import QRCode from "qrcode";
+import DjLogo, { type LogoStyle } from "@/components/DjLogo";
 
 interface Props {
   name: string;
@@ -10,6 +11,7 @@ interface Props {
   eventDate: string;
   url: string;
   eventId: string;
+  logoStyle: string | null;
 }
 
 type DesignKey = "light" | "neon" | "spotify" | "gradient";
@@ -165,8 +167,14 @@ export default function FlyerCard({
   tagline,
   eventDate,
   url,
-  eventId
+  eventId,
+  logoStyle
 }: Props) {
+  const validLogoStyle = (
+    ["vinyl", "equalizer", "headphones", "wave", "monogram"] as const
+  ).includes(logoStyle as LogoStyle)
+    ? (logoStyle as LogoStyle)
+    : null;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [design, setDesign] = useState<DesignKey>("neon");
 
@@ -308,7 +316,13 @@ export default function FlyerCard({
 
             {/* Footer — minimal */}
             <div className="flyer-footer">
-              <span className="brand-mark">w</span>
+              {validLogoStyle ? (
+                <span className="brand-logo">
+                  <DjLogo style={validLogoStyle} size={28} />
+                </span>
+              ) : (
+                <span className="brand-mark">w</span>
+              )}
               <span className="brand-text-line">
                 <span className="brand-name">wishbeat</span>
                 <span className="brand-sep"> · </span>
@@ -496,6 +510,19 @@ export default function FlyerCard({
           color: var(--brand-mark-text);
           font-size: 9pt;
           font-weight: 900;
+        }
+
+        .brand-logo {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 8mm;
+          height: 8mm;
+        }
+
+        .brand-logo svg {
+          width: 100%;
+          height: 100%;
         }
 
         .brand-text-line {

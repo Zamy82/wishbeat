@@ -26,6 +26,13 @@ export default async function FlyerPage({ params }: Props) {
     process.env.NEXT_PUBLIC_APP_URL ?? "https://wishbeat-zamy82-s-projects.vercel.app";
   const eventUrl = `${baseUrl}/event/${event.slug}`;
 
+  // DJ-Profil holen für Logo-Auswahl
+  const { data: profile } = await supabase
+    .from("dj_profiles")
+    .select("logo_style")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
   return (
     <FlyerCard
       name={event.name}
@@ -33,6 +40,7 @@ export default async function FlyerPage({ params }: Props) {
       eventDate={event.event_date}
       url={eventUrl}
       eventId={event.id}
+      logoStyle={profile?.logo_style ?? null}
     />
   );
 }
