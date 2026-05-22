@@ -115,14 +115,19 @@ export default function AssistantClient() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  async function runSearch(q: string) {
+  async function runSearch(q: string, randomize = false) {
     if (q.trim().length < 2) {
       setSearchResults([]);
       return;
     }
     setSearching(true);
     try {
-      const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(q)}`);
+      // Bei Quick-Genre-Klicks: zufaelliger Offset (0-180), damit andere Songs
+      // erscheinen. Spotify-Search ist sonst deterministisch.
+      const offset = randomize ? Math.floor(Math.random() * 180) : 0;
+      const res = await fetch(
+        `/api/spotify/search?q=${encodeURIComponent(q)}&offset=${offset}`
+      );
       const data = await res.json();
       setSearchResults(data.tracks ?? []);
     } finally {
@@ -133,12 +138,12 @@ export default function AssistantClient() {
   function onSearchChange(v: string) {
     setSearchQuery(v);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    searchTimerRef.current = setTimeout(() => runSearch(v), 350);
+    searchTimerRef.current = setTimeout(() => runSearch(v, false), 350);
   }
 
   function applyQuickGenre(q: string) {
     setSearchQuery(q);
-    runSearch(q);
+    runSearch(q, true);
   }
 
   async function queueTrack(track: Track) {

@@ -12,8 +12,14 @@ export async function GET(request: NextRequest) {
   const limitParam = request.nextUrl.searchParams.get("limit");
   const limit = limitParam ? Math.min(50, Math.max(1, parseInt(limitParam, 10) || 20)) : 20;
 
+  // Optional ?offset= — fuer Variation bei wiederholten Klicks auf Quick-Genre
+  const offsetParam = request.nextUrl.searchParams.get("offset");
+  const offset = offsetParam
+    ? Math.min(900, Math.max(0, parseInt(offsetParam, 10) || 0))
+    : 0;
+
   try {
-    const tracks = await searchTracks(q, limit);
+    const tracks = await searchTracks(q, limit, offset);
     return NextResponse.json({ tracks });
   } catch (err) {
     console.error("Spotify search error:", err);

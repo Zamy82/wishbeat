@@ -75,14 +75,20 @@ async function searchOnce(
   return data.tracks.items as SpotifyApiTrack[];
 }
 
-export async function searchTracks(query: string, totalLimit = 8): Promise<SearchedTrack[]> {
+export async function searchTracks(
+  query: string,
+  totalLimit = 8,
+  startOffset = 0
+): Promise<SearchedTrack[]> {
   const token = await getAccessToken();
 
   // Wenn ≤ 10 reichen, ein Call. Sonst parallele Calls mit offsets.
+  // startOffset wird genutzt für "andere Songs zeigen bei wiederholtem Klick"
+  // auf Quick-Genre-Buttons.
   const calls: Promise<SpotifyApiTrack[]>[] = [];
   for (let offset = 0; offset < totalLimit; offset += MAX_PER_CALL) {
     const limit = Math.min(MAX_PER_CALL, totalLimit - offset);
-    calls.push(searchOnce(token, query, limit, offset));
+    calls.push(searchOnce(token, query, limit, startOffset + offset));
   }
 
   const results = await Promise.all(calls);
