@@ -30,9 +30,10 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
   const [requests, setRequests] = useState<SongRequest[]>(initialRequests);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast>(null);
-  // Gespielte Wünsche standardmäßig eingeklappt — sind nach langem Abend
-  // schnell viele, einfach zum Toggeln
+  // Gespielte + abgelehnte Wünsche standardmäßig eingeklappt — sind nach
+  // langem Abend schnell viele, einfach zum Toggeln
   const [showPlayed, setShowPlayed] = useState(false);
+  const [showRejected, setShowRejected] = useState(false);
   // Tracks die schon als "gespielt" automatisch markiert wurden — verhindert
   // doppelte Updates während ein langer Track läuft.
   const autoMarkedRef = useRef<Set<string>>(new Set());
@@ -226,8 +227,11 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
       )}
 
       {(() => {
-        const activeRequests = requests.filter((r) => r.status !== "played");
+        const activeRequests = requests.filter(
+          (r) => r.status === "pending" || r.status === "approved"
+        );
         const playedRequests = requests.filter((r) => r.status === "played");
+        const rejectedRequests = requests.filter((r) => r.status === "rejected");
 
         const renderItem = (req: SongRequest) => (
           <li
@@ -320,19 +324,21 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
           </li>
         );
 
+        const noActiveOnly =
+          activeRequests.length === 0 &&
+          (playedRequests.length > 0 || rejectedRequests.length > 0);
+
         return (
           <>
             {activeRequests.length > 0 ? (
               <ul className="flex flex-col gap-3">
                 {activeRequests.map(renderItem)}
               </ul>
-            ) : (
-              playedRequests.length > 0 && (
-                <p className="text-white/40 text-sm text-center py-4">
-                  Alle Wünsche bereits gespielt 🎉
-                </p>
-              )
-            )}
+            ) : noActiveOnly ? (
+              <p className="text-white/40 text-sm text-center py-4">
+                Keine aktiven Wünsche — siehe unten für gespielte/abgelehnte
+              </p>
+            ) : null}
 
             {playedRequests.length > 0 && (
               <div className="mt-4">
@@ -340,12 +346,43 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
                   onClick={() => setShowPlayed(!showPlayed)}
                   className="w-full px-4 py-3 rounded-2xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] hover:border-white/20 text-white/70 hover:text-white text-sm font-medium transition flex items-center justify-center gap-2"
                 >
-                  <span className="transition-transform" style={{ transform: showPlayed ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
-                  {showPlayed ? "Gespielte verbergen" : `${playedRequests.length} bereits gespielt anzeigen`}
+                  <span
+                    className="transition-transform"
+                    style={{ transform: showPlayed ? "rotate(180deg)" : "rotate(0deg)" }}
+                  >
+                    ▼
+                  </span>
+                  {showPlayed
+                    ? "Gespielte verbergen"
+                    : `${playedRequests.length} bereits gespielt anzeigen`}
                 </button>
                 {showPlayed && (
                   <ul className="flex flex-col gap-3 mt-3">
                     {playedRequests.map(renderItem)}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {rejectedRequests.length > 0 && (
+              <div className="mt-3">
+                <button
+                  onClick={() => setShowRejected(!showRejected)}
+                  className="w-full px-4 py-3 rounded-2xl border border-white/10 bg-white/[0.03] hover:bg-white/[0.07] hover:border-white/20 text-white/70 hover:text-white text-sm font-medium transition flex items-center justify-center gap-2"
+                >
+                  <span
+                    className="transition-transform"
+                    style={{ transform: showRejected ? "rotate(180deg)" : "rotate(0deg)" }}
+                  >
+                    ▼
+                  </span>
+                  {showRejected
+                    ? "Abgelehnte verbergen"
+                    : `${rejectedRequests.length} abgelehnt anzeigen`}
+                </button>
+                {showRejected && (
+                  <ul className="flex flex-col gap-3 mt-3">
+                    {rejectedRequests.map(renderItem)}
                   </ul>
                 )}
               </div>
