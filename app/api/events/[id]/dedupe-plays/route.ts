@@ -2,14 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 // Loescht doppelte event_plays-Eintraege fuer ein Event.
-// Definition Duplikat: gleicher spotify_track_id innerhalb 3 Minuten.
+// Definition Duplikat: gleicher spotify_track_id innerhalb 60 Minuten.
 // Behaelt den AELTESTEN Eintrag pro Gruppe.
+// 60 Min ist gross genug um Test-Phasen-Duplikate zu fangen, klein genug
+// damit legitime Wiederholungen im Lauf eines langen Abends erhalten bleiben.
 
 interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-const WINDOW_MS = 3 * 60 * 1000;
+const WINDOW_MS = 60 * 60 * 1000;
 
 export async function POST(_req: NextRequest, ctx: RouteContext) {
   const { id: eventId } = await ctx.params;
