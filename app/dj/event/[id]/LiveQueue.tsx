@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import type { SongRequest, RequestStatus } from "@/lib/types";
-import { matchPercent, matchTone } from "@/lib/vibe-match";
+import { matchTone } from "@/lib/vibe-match";
 
 const STATUS_LABEL: Record<RequestStatus, string> = {
   pending: "Offen",
@@ -44,6 +44,9 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
   // Vibe-State: aggregierte Genre-Woerter der letzten Plays
   const [vibeTokens, setVibeTokens] = useState<Record<string, number>>({});
   const [vibePlayCount, setVibePlayCount] = useState(0);
+  // Match-% pro Track-ID — vom Server berechnet (funktioniert auch ohne
+  // DB-Migration, da der Server Genres direkt von Spotify holt)
+  const [matches, setMatches] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!toast) return;
@@ -51,22 +54,38 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
     return () => clearTimeout(t);
   }, [toast]);
 
-  // Vibe periodisch laden (alle 20s) — basiert auf letzten event_plays
+  // Vibe + Matches periodisch laden (alle 20s).
+  // Active Wuensche werden als track_ids mitgegeben — Server berechnet
+  // Match-% pro Wunsch direkt, ohne DB-Spalte zu brauchen.
+  const activeTrackIds = requests
+    .filter((r) => r.status === "pending" || r.status === "approved")
+    .map((r) => r.spotify_track_id)
+    .join(",");
+
   useEffect(() => {
     let cancelled = false;
     async function loadVibe() {
       try {
-        const res = await fetch(`/api/events/${eventId}/vibe`, { cache: "no-store" });
+        const url = activeTrackIds
+          ? `/api/events/${eventId}/vibe?track_ids=${activeTrackIds}`
+          : `/api/events/${eventId}/vibe`;
+        const res = await fetch(url, { cache: "no-store" });
         const data = await res.json();
         if (cancelled) return;
         setVibeTokens(data.vibeTokens ?? {});
         setVibePlayCount(data.playCount ?? 0);
+        const mMap: Record<string, number> = {};
+        const rawMatches = data.matches ?? {};
+        for (const tid of Object.keys(rawMatches)) {
+          mMap[tid] = rawMatches[tid].percent;
+        }
+        setMatches(mMap);
       } catch {}
     }
     loadVibe();
     const id = setInterval(loadVibe, 20000);
     return () => { cancelled = true; clearInterval(id); };
-  }, [eventId]);
+  }, [eventId, activeTrackIds]);
 
   // Auto-Mark-As-Played: pollt Spotify Now-Playing und matched gegen
   // angenommene Wünsche. Wenn der Track läuft -> setze status="played".
@@ -310,7 +329,7 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
         const rejectedRequests = requests.filter((r) => r.status === "rejected");
 
         const renderItem = (req: SongRequest) => {
-          const matchResult = matchPercent(req.artist_genres, vibeTokens);
+          const serverMatch = matches[req.spotify_track_id];
           return (
           <li
             key={req.id}
@@ -343,8 +362,8 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
                 >
                   {STATUS_LABEL[req.status]}
                 </span>
-                {vibePlayCount >= 1 && matchResult && (req.status === "pending" || req.status === "approved") && (
-                  <MatchPill percent={matchResult.percent} />
+                {vibePlayCount >= 1 && typeof serverMatch === "number" && (req.status === "pending" || req.status === "approved") && (
+                  <MatchPill percent={serverMatch} />
                 )}
               </div>
             </div>
