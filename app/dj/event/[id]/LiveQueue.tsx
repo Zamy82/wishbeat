@@ -118,9 +118,8 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
 
         const currentSpotifyId = data.track.id as string;
 
-        // Play-Tracking: bei jedem Track-Wechsel → INSERT in event_plays.
-        // Damit haben wir eine vollstaendige History aller gespielten Songs
-        // (auch DJ-Playlist-Songs ohne Wunsch).
+        // Play-Tracking: bei jedem Track-Wechsel → server-seitiger Insert.
+        // Server uebernimmt Ownership-Check + Genres + Fehler-Reporting.
         if (lastSeenTrackRef.current !== currentSpotifyId) {
           lastSeenTrackRef.current = currentSpotifyId;
           const matchingRequest = requests.find(
@@ -129,43 +128,32 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
               r.spotify_track_id === currentSpotifyId
           );
 
-          // Genres: bei Wunsch direkt uebernehmen, sonst von Spotify holen
-          let genresForPlay: string[] | null = matchingRequest?.artist_genres ?? null;
-          if (!genresForPlay || genresForPlay.length === 0) {
-            try {
-              const gRes = await fetch(
-                `/api/spotify/track-genres?track_id=${currentSpotifyId}`,
-                { cache: "no-store" }
-              );
-              const gData = await gRes.json();
-              genresForPlay = (gData.genres ?? []) as string[];
-            } catch {
-              genresForPlay = [];
-            }
-          }
-
-          const supabase = createClient();
-          const basePlay = {
-            event_id: eventId,
-            spotify_track_id: currentSpotifyId,
-            title: data.track.title,
-            artist: data.track.artist,
-            cover_url: data.track.cover_url,
-            source: matchingRequest ? "wish" : "auto",
-            request_id: matchingRequest?.id ?? null
-          };
-          // Erst mit Genres versuchen, bei Spalten-Problem ohne nachschieben
-          supabase
-            .from("event_plays")
-            .insert({ ...basePlay, artist_genres: genresForPlay })
-            .then((res) => {
-              if (res.error) {
-                const m = (res.error.message ?? "").toLowerCase();
-                if (m.includes("artist_genres") || m.includes("schema cache")) {
-                  supabase.from("event_plays").insert(basePlay).then(() => {});
-                }
-              }
+          try {
+            const trackRes = await fetch(`/api/events/${eventId}/track-play`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                spotify_track_id: currentSpotifyId,
+                title: data.track.title,
+                artist: data.track.artist,
+                cover_url: data.track.cover_url,
+                source: matchingRequest ? "wish" : "auto",
+                request_id: matchingRequest?.id ?? null
+              })
             });
+            const trackData = await trackRes.json();
+            if (!trackData.ok) {
+              setToast({
+                kind: "err",
+                text: `Auto-Track-Fehler: ${trackData.message ?? "unbekannt"}`
+              });
+            }
+          } catch (e) {
+            setToast({
+              kind: "err",
+              text: `Auto-Track-Netzwerkfehler: ${(e as Error).message ?? "unbekannt"}`
+            });
+          }
         }
 
         // Schon mal auto-marked? Skip.
@@ -254,42 +242,35 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
         });
         return;
       }
-      const tid = np.track.id as string;
-      // Genres holen
-      let genres: string[] = [];
-      try {
-        const gRes = await fetch(`/api/spotify/track-genres?track_id=${tid}`, { cache: "no-store" });
-        const gData = await gRes.json();
-        genres = gData.genres ?? [];
-      } catch {}
 
-      const supabase = createClient();
-      const basePlay = {
-        event_id: eventId,
-        spotify_track_id: tid,
-        title: np.track.title,
-        artist: np.track.artist,
-        cover_url: np.track.cover_url,
-        source: "auto" as const,
-        request_id: null as string | null
-      };
-      let { error } = await supabase
-        .from("event_plays")
-        .insert({ ...basePlay, artist_genres: genres });
-      if (error) {
-        const m = (error.message ?? "").toLowerCase();
-        if (m.includes("artist_genres") || m.includes("schema cache")) {
-          ({ error } = await supabase.from("event_plays").insert(basePlay));
-        }
-      }
-      if (error) {
-        setToast({ kind: "err", text: `DB-Fehler: ${error.message}` });
+      const trackRes = await fetch(`/api/events/${eventId}/track-play`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          spotify_track_id: np.track.id,
+          title: np.track.title,
+          artist: np.track.artist,
+          cover_url: np.track.cover_url,
+          source: "auto",
+          request_id: null
+        })
+      });
+      const trackData = await trackRes.json();
+      if (!trackData.ok) {
+        setToast({
+          kind: "err",
+          text: `DB-Fehler: ${trackData.message ?? "unbekannt"}${trackData.hint ? ` (Hinweis: ${trackData.hint})` : ""}`
+        });
         return;
       }
-      lastSeenTrackRef.current = tid;
-      setToast({ kind: "ok", text: `Mitgeschrieben: ${np.track.title}` });
 
-      // Vibe sofort neu laden — kein 20-Sek-Warten
+      lastSeenTrackRef.current = np.track.id;
+      setToast({
+        kind: "ok",
+        text: `Mitgeschrieben: ${np.track.title} (${trackData.genresCount ?? 0} Genre-Tags)`
+      });
+
+      // Vibe sofort neu laden
       try {
         const vRes = await fetch(`/api/events/${eventId}/vibe`, { cache: "no-store" });
         const vData = await vRes.json();
