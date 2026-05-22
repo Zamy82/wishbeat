@@ -8,6 +8,7 @@ import TaglineEditor from "./TaglineEditor";
 import RatingsPanel from "./RatingsPanel";
 import StatsPanel from "./StatsPanel";
 import DjPushOptIn from "./DjPushOptIn";
+import ResetWishlistButton from "./ResetWishlistButton";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -108,12 +109,18 @@ export default async function DjEventPage({ params }: Props) {
       <DjPushOptIn />
 
       <section>
-        <h2 className="text-lg font-semibold text-white/80 mb-4">
-          Wunschliste{" "}
-          <span className="text-white/30 font-normal text-base">
-            ({requests?.length ?? 0})
-          </span>
-        </h2>
+        <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+          <h2 className="text-lg font-semibold text-white/80">
+            Wunschliste{" "}
+            <span className="text-white/30 font-normal text-base">
+              ({requests?.length ?? 0})
+            </span>
+          </h2>
+          <ResetWishlistButton
+            eventId={id}
+            hasData={(requests?.length ?? 0) > 0 || (plays?.length ?? 0) > 0}
+          />
+        </div>
         <LiveQueue eventId={id} initialRequests={requests ?? []} />
       </section>
 
