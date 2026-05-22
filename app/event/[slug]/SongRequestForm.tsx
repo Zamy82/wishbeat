@@ -97,26 +97,57 @@ export default function SongRequestForm({ eventId }: Props) {
 
     const sessionId = getGuestSessionId();
     const supabase = createClient();
-    const { data: inserted, error: dbError } = await supabase
-      .from("song_requests")
-      .insert({
-        event_id: eventId,
-        spotify_track_id: selected.id,
-        title: selected.title,
-        artist: selected.artist,
-        cover_url: selected.cover_url,
-        guest_nickname: nickname.trim() || null,
-        requester_session_id: sessionId,
-        status: "pending",
-        artist_genres: selectedGenres ?? null
-      })
-      .select("id")
-      .single();
+
+    const baseRow = {
+      event_id: eventId,
+      spotify_track_id: selected.id,
+      title: selected.title,
+      artist: selected.artist,
+      cover_url: selected.cover_url,
+      guest_nickname: nickname.trim() || null,
+      requester_session_id: sessionId,
+      status: "pending" as const
+    };
+
+    // Erst mit artist_genres versuchen — wenn die Spalte (noch) nicht
+    // existiert oder Schema-Cache veraltet ist, ohne Genres erneut versuchen.
+    let inserted: { id: string } | null = null;
+    let dbError: { message?: string; code?: string } | null = null;
+    {
+      const res = await supabase
+        .from("song_requests")
+        .insert({ ...baseRow, artist_genres: selectedGenres ?? null })
+        .select("id")
+        .single();
+      inserted = res.data;
+      dbError = res.error;
+    }
+
+    if (dbError) {
+      const msg = (dbError.message ?? "").toLowerCase();
+      const isGenresColumnIssue =
+        msg.includes("artist_genres") ||
+        msg.includes("schema cache") ||
+        dbError.code === "PGRST204";
+      if (isGenresColumnIssue) {
+        console.warn("Retry without artist_genres:", dbError);
+        const res = await supabase
+          .from("song_requests")
+          .insert(baseRow)
+          .select("id")
+          .single();
+        inserted = res.data;
+        dbError = res.error;
+      }
+    }
 
     setLoading(false);
 
     if (dbError) {
-      setError("Konnte deinen Wunsch nicht speichern. Bitte nochmal versuchen.");
+      console.error("Song request insert failed:", dbError);
+      setError(
+        `Konnte deinen Wunsch nicht speichern (${dbError.message ?? "unbekannter Fehler"}).`
+      );
       return;
     }
 

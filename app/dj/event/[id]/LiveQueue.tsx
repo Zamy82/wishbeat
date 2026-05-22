@@ -109,19 +109,27 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
           }
 
           const supabase = createClient();
+          const basePlay = {
+            event_id: eventId,
+            spotify_track_id: currentSpotifyId,
+            title: data.track.title,
+            artist: data.track.artist,
+            cover_url: data.track.cover_url,
+            source: matchingRequest ? "wish" : "auto",
+            request_id: matchingRequest?.id ?? null
+          };
+          // Erst mit Genres versuchen, bei Spalten-Problem ohne nachschieben
           supabase
             .from("event_plays")
-            .insert({
-              event_id: eventId,
-              spotify_track_id: currentSpotifyId,
-              title: data.track.title,
-              artist: data.track.artist,
-              cover_url: data.track.cover_url,
-              source: matchingRequest ? "wish" : "auto",
-              request_id: matchingRequest?.id ?? null,
-              artist_genres: genresForPlay
-            })
-            .then(() => {});
+            .insert({ ...basePlay, artist_genres: genresForPlay })
+            .then((res) => {
+              if (res.error) {
+                const m = (res.error.message ?? "").toLowerCase();
+                if (m.includes("artist_genres") || m.includes("schema cache")) {
+                  supabase.from("event_plays").insert(basePlay).then(() => {});
+                }
+              }
+            });
         }
 
         // Schon mal auto-marked? Skip.
