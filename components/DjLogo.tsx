@@ -255,17 +255,16 @@ function MonogramLogo({ size, monochrome, className }: VariantProps) {
       </text>
       {/* Linie zwischen */}
       <line x1="32" y1="42" x2="68" y2="42" stroke={color} strokeWidth="1.5" opacity="0.5" />
-      {/* "Z" groß */}
+      {/* "Zamy" — Z groß + amy klein, zusammen als Wortmarke */}
       <text
         x="50"
         y="78"
         textAnchor="middle"
-        fontSize="42"
-        fontWeight="900"
         fill={color}
         fontFamily="system-ui, sans-serif"
       >
-        Z
+        <tspan fontSize="38" fontWeight="900">Z</tspan>
+        <tspan fontSize="16" fontWeight="700" fontStyle="italic" dx="1">amy</tspan>
       </text>
     </svg>
   );
