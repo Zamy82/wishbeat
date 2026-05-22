@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { computeVibeTokens, matchPercent } from "@/lib/vibe-match";
 import { getTrackArtistGenres } from "@/lib/spotify";
+
+// Service-Role-Client: liest event_plays auch fuer anonyme Gaeste
+// (RLS-Bypass — wir geben aber NUR vibe-tokens raus, nichts sensibles).
+function adminClient() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+}
 
 // Liefert die aktuelle Stimmung eines Events als gewichtete Wortliste.
 // Basis: die letzten ~10 Songs aus event_plays.
@@ -24,7 +34,8 @@ interface PlayRow {
 
 export async function GET(req: NextRequest, ctx: RouteContext) {
   const { id } = await ctx.params;
-  const supabase = await createClient();
+  // Service-Role: damit auch anonyme Gaeste den Vibe sehen
+  const supabase = adminClient();
 
   // Optional: track_ids=A,B,C → Server berechnet Match-% pro Track gleich mit
   const trackIdsParam = req.nextUrl.searchParams.get("track_ids");
