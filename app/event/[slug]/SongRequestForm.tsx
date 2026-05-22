@@ -54,16 +54,20 @@ export default function SongRequestForm({ eventId }: Props) {
 
     const sessionId = getGuestSessionId();
     const supabase = createClient();
-    const { error: dbError } = await supabase.from("song_requests").insert({
-      event_id: eventId,
-      spotify_track_id: selected.id,
-      title: selected.title,
-      artist: selected.artist,
-      cover_url: selected.cover_url,
-      guest_nickname: nickname.trim() || null,
-      requester_session_id: sessionId,
-      status: "pending"
-    });
+    const { data: inserted, error: dbError } = await supabase
+      .from("song_requests")
+      .insert({
+        event_id: eventId,
+        spotify_track_id: selected.id,
+        title: selected.title,
+        artist: selected.artist,
+        cover_url: selected.cover_url,
+        guest_nickname: nickname.trim() || null,
+        requester_session_id: sessionId,
+        status: "pending"
+      })
+      .select("id")
+      .single();
 
     setLoading(false);
 
@@ -77,6 +81,15 @@ export default function SongRequestForm({ eventId }: Props) {
     // Im Hintergrund: Service Worker + Push-Subscription anlegen.
     // Fehler ignorieren — Wunsch ist abgespeichert, Push ist nur Bonus.
     subscribeForEvent({ eventId, sessionId }).catch(() => {});
+
+    // Push-Notification an den DJ schicken (fire-and-forget)
+    if (inserted?.id) {
+      fetch("/api/push/notify-wish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ request_id: inserted.id })
+      }).catch(() => {});
+    }
   }
 
   if (submitted) {

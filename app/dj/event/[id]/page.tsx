@@ -7,6 +7,7 @@ import EventControls from "./EventControls";
 import TaglineEditor from "./TaglineEditor";
 import RatingsPanel from "./RatingsPanel";
 import StatsPanel from "./StatsPanel";
+import DjPushOptIn from "./DjPushOptIn";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -103,6 +104,8 @@ export default async function DjEventPage({ params }: Props) {
           </Link>
         </div>
       </header>
+
+      <DjPushOptIn />
 
       <section>
         <h2 className="text-lg font-semibold text-white/80 mb-4">

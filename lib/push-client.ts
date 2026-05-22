@@ -32,6 +32,58 @@ export async function ensureServiceWorker(): Promise<ServiceWorkerRegistration |
   }
 }
 
+async function getOrCreateSubscription(): Promise<PushSubscription | null> {
+  const reg = await ensureServiceWorker();
+  if (!reg) return null;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    try {
+      const keyArray = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: keyArray.buffer as ArrayBuffer
+      });
+    } catch {
+      return null;
+    }
+  }
+  return sub;
+}
+
+export async function subscribeAsDj(): Promise<{
+  ok: boolean;
+  reason?: string;
+}> {
+  if (!isPushSupported()) return { ok: false, reason: "unsupported" };
+  if (!VAPID_PUBLIC_KEY) return { ok: false, reason: "no_vapid" };
+
+  if (Notification.permission === "default") {
+    const result = await Notification.requestPermission();
+    if (result !== "granted") return { ok: false, reason: "denied" };
+  } else if (Notification.permission !== "granted") {
+    return { ok: false, reason: "denied" };
+  }
+
+  const sub = await getOrCreateSubscription();
+  if (!sub) return { ok: false, reason: "subscribe_failed" };
+
+  try {
+    const json = sub.toJSON();
+    const res = await fetch("/api/push/subscribe-dj", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subscription: { endpoint: json.endpoint, keys: json.keys }
+      })
+    });
+    if (!res.ok) return { ok: false, reason: "store_failed" };
+  } catch {
+    return { ok: false, reason: "store_failed" };
+  }
+
+  return { ok: true };
+}
+
 export async function subscribeForEvent(params: {
   eventId: string;
   sessionId: string;
