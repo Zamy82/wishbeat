@@ -12,7 +12,7 @@ interface Props {
   eventName: string;
 }
 
-const PRESET_AMOUNTS = [2, 5, 10];
+const PRESET_AMOUNTS = [5, 10, 20];
 
 export default function TipSection({
   djDisplayName,
@@ -33,7 +33,10 @@ export default function TipSection({
 
   // Verwendungszweck als "Geschenk" formuliert — rechtssicher als private
   // Schenkung erkennbar (keine Dienstleistungs-Implikation wie bei "Trinkgeld").
-  const purpose = `Geschenk an ${djDisplayName}`;
+  // Wir nutzen nur den Vornamen aus iban_holder, damit "Geschenk an Zamy" steht
+  // (nicht "Geschenk an DJ Zamy" — das wäre eine Dienstleistungs-Konnotation).
+  const firstName = ibanHolder.trim().split(/\s+/)[0] || djDisplayName;
+  const purpose = `Geschenk an ${firstName}`;
 
   useEffect(() => {
     if (!canvasRef.current) return;
