@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import SongRequestForm from "./SongRequestForm";
+import TipSection from "./TipSection";
+import RatingSection from "./RatingSection";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -12,11 +14,30 @@ export default async function EventPage({ params }: Props) {
 
   const { data: event } = await supabase
     .from("events")
-    .select("id, name, tagline, event_date, is_active")
+    .select("id, name, tagline, event_date, is_active, owner_id")
     .eq("slug", slug)
     .single();
 
   if (!event) notFound();
+
+  // DJ-Profil laden (für Trinkgeld) — RLS-Policy erlaubt das für aktive Events
+  const { data: djProfile } = await supabase
+    .from("dj_profiles")
+    .select("display_name, iban_holder, iban, bic")
+    .eq("user_id", event.owner_id)
+    .maybeSingle();
+
+  const canTip = !!(
+    djProfile?.iban &&
+    djProfile?.iban_holder &&
+    djProfile.iban.length > 0 &&
+    djProfile.iban_holder.length > 0
+  );
+
+  const djDisplayName =
+    djProfile?.display_name?.trim() ||
+    djProfile?.iban_holder?.trim() ||
+    "den DJ";
 
   return (
     <main className="min-h-screen flex flex-col items-center px-4 py-10">
@@ -49,6 +70,20 @@ export default async function EventPage({ params }: Props) {
             Wunschsongs werden nicht mehr angenommen. Danke fürs Mitmachen!
           </p>
         </div>
+      )}
+
+      {/* Bewertung — auch bei beendeten Events erlaubt (Feedback nachträglich) */}
+      <RatingSection eventId={event.id} eventName={event.name} />
+
+      {/* Trinkgeld — nur wenn DJ seine IBAN eingetragen hat */}
+      {canTip && djProfile && (
+        <TipSection
+          djDisplayName={djDisplayName}
+          ibanHolder={djProfile.iban_holder!}
+          iban={djProfile.iban!}
+          bic={djProfile.bic}
+          eventName={event.name}
+        />
       )}
     </main>
   );

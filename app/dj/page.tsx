@@ -37,6 +37,12 @@ export default async function DjDashboardPage() {
             🎛️ DJ-Assistent
           </Link>
           <Link
+            href="/dj/settings"
+            className="px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold text-sm transition"
+          >
+            ⚙️ Einstellungen
+          </Link>
+          <Link
             href="/dj/new-event"
             className="px-5 py-2.5 rounded-full bg-gradient-to-r from-neon-pink to-neon-purple text-white font-semibold text-sm hover:opacity-90 transition"
           >

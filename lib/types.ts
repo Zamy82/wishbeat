@@ -32,3 +32,22 @@ export interface SpotifyTrack {
   cover_url: string | null;
   duration_ms: number;
 }
+
+export interface DjProfile {
+  user_id: string;
+  display_name: string | null;
+  iban_holder: string | null;
+  iban: string | null;
+  bic: string | null;
+  paypal_handle: string | null;
+  updated_at: string;
+}
+
+export interface EventRating {
+  id: string;
+  event_id: string;
+  rating: number; // 1-5
+  comment: string | null;
+  nickname: string | null;
+  created_at: string;
+}
