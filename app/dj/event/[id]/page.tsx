@@ -9,6 +9,7 @@ import RatingsPanel from "./RatingsPanel";
 import StatsPanel from "./StatsPanel";
 import DjPushOptIn from "./DjPushOptIn";
 import ResetWishlistButton from "./ResetWishlistButton";
+import DedupePlaysButton from "./DedupePlaysButton";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -116,10 +117,13 @@ export default async function DjEventPage({ params }: Props) {
               ({requests?.length ?? 0})
             </span>
           </h2>
-          <ResetWishlistButton
-            eventId={id}
-            hasData={(requests?.length ?? 0) > 0 || (plays?.length ?? 0) > 0}
-          />
+          <div className="flex items-center gap-2 flex-wrap">
+            {(plays?.length ?? 0) > 0 && <DedupePlaysButton eventId={id} />}
+            <ResetWishlistButton
+              eventId={id}
+              hasData={(requests?.length ?? 0) > 0 || (plays?.length ?? 0) > 0}
+            />
+          </div>
         </div>
         <LiveQueue eventId={id} initialRequests={requests ?? []} />
       </section>
