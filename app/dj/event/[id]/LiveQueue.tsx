@@ -47,6 +47,13 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
   // Match-% pro Track-ID — vom Server berechnet (funktioniert auch ohne
   // DB-Migration, da der Server Genres direkt von Spotify holt)
   const [matches, setMatches] = useState<Record<string, number>>({});
+  // Debug-Info: was meldet Spotify zuletzt?
+  const [nowPlayingDebug, setNowPlayingDebug] = useState<{
+    title: string | null;
+    reason: string | null;
+    playing: boolean;
+    at: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -97,7 +104,17 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
       try {
         const res = await fetch("/api/spotify/now-playing", { cache: "no-store" });
         const data = await res.json();
-        if (!data?.playing || !data?.track?.id) return;
+
+        // Debug-Info immer aktualisieren — auch bei Fehlern
+        setNowPlayingDebug({
+          title: data?.track?.title ?? null,
+          reason: data?.reason ?? null,
+          playing: !!data?.playing,
+          at: Date.now()
+        });
+
+        // Track-ID reicht — auch pausiert mitschreiben (Song war/ist geladen)
+        if (!data?.track?.id) return;
 
         const currentSpotifyId = data.track.id as string;
 
@@ -226,6 +243,56 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
     return () => { supabase.removeChannel(channel); };
   }, [eventId]);
 
+  async function trackCurrentSongNow() {
+    try {
+      const npRes = await fetch("/api/spotify/now-playing", { cache: "no-store" });
+      const np = await npRes.json();
+      if (!np?.track?.id) {
+        setToast({
+          kind: "err",
+          text: `Spotify meldet keinen Song. Grund: ${np?.reason ?? "unbekannt"}`
+        });
+        return;
+      }
+      const tid = np.track.id as string;
+      // Genres holen
+      let genres: string[] = [];
+      try {
+        const gRes = await fetch(`/api/spotify/track-genres?track_id=${tid}`, { cache: "no-store" });
+        const gData = await gRes.json();
+        genres = gData.genres ?? [];
+      } catch {}
+
+      const supabase = createClient();
+      const basePlay = {
+        event_id: eventId,
+        spotify_track_id: tid,
+        title: np.track.title,
+        artist: np.track.artist,
+        cover_url: np.track.cover_url,
+        source: "auto" as const,
+        request_id: null as string | null
+      };
+      let { error } = await supabase
+        .from("event_plays")
+        .insert({ ...basePlay, artist_genres: genres });
+      if (error) {
+        const m = (error.message ?? "").toLowerCase();
+        if (m.includes("artist_genres") || m.includes("schema cache")) {
+          ({ error } = await supabase.from("event_plays").insert(basePlay));
+        }
+      }
+      if (error) {
+        setToast({ kind: "err", text: `DB-Fehler: ${error.message}` });
+        return;
+      }
+      lastSeenTrackRef.current = tid;
+      setToast({ kind: "ok", text: `Mitgeschrieben: ${np.track.title}` });
+    } catch (e) {
+      setToast({ kind: "err", text: `Fehler: ${(e as Error).message ?? "unbekannt"}` });
+    }
+  }
+
   async function updateStatus(requestId: string, status: RequestStatus) {
     const supabase = createClient();
     await supabase.from("song_requests").update({ status }).eq("id", requestId);
@@ -289,10 +356,10 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
       )}
 
       {/* Vibe-Status: zeigt woraus der Match-Score gerade gebildet wird */}
-      <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-xs">
+      <div className="mb-4 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-xs space-y-2">
         {vibePlayCount === 0 ? (
           <span className="text-white/40">
-            🎚 Vibe: Noch keine Songs getrackt — Spotify muss laufen + diese Seite offen sein.
+            🎚 Vibe: Noch keine Songs getrackt.
           </span>
         ) : topVibeWords.length === 0 ? (
           <span className="text-white/40">
@@ -311,6 +378,23 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
             ))}
           </div>
         )}
+
+        {/* Spotify Status-Zeile + Manuell-Button */}
+        <div className="flex items-center justify-between gap-3 flex-wrap pt-2 border-t border-white/5">
+          <span className="text-white/40">
+            {nowPlayingDebug
+              ? nowPlayingDebug.title
+                ? `Spotify meldet: „${nowPlayingDebug.title}" ${nowPlayingDebug.playing ? "(läuft)" : "(pausiert)"}`
+                : `Spotify-Status: ${nowPlayingDebug.reason ?? "unbekannt"}`
+              : "Spotify-Abfrage läuft…"}
+          </span>
+          <button
+            onClick={() => trackCurrentSongNow()}
+            className="px-3 py-1 rounded-full border border-neon-cyan/40 text-neon-cyan hover:bg-neon-cyan/10 text-[11px] font-medium transition"
+          >
+            Jetzt mitschreiben
+          </button>
+        </div>
       </div>
 
       {requests.length === 0 && (
