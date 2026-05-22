@@ -173,7 +173,10 @@ export default function SongRequestForm({ eventId }: Props) {
 
     // Service Worker + Push-Subscription anlegen — Ergebnis sichtbar machen.
     subscribeForEvent({ eventId, sessionId })
-      .then((r) => setPushStatus(r))
+      .then((r) => {
+        if (r.ok) setPushStatus({ ok: true });
+        else setPushStatus({ ok: false, reason: r.reason ?? "unknown" });
+      })
       .catch(() => setPushStatus({ ok: false, reason: "exception" }));
 
     // Push-Notification an den DJ schicken (fire-and-forget)
