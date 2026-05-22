@@ -17,6 +17,8 @@ interface TrackStat {
   cover_url: string | null;
   count: number;
   played: number;
+  artistTotal: number; // wie oft der Künstler insgesamt gewünscht wurde
+  latestCreatedAt: string;
 }
 
 interface ArtistStat {
@@ -190,7 +192,14 @@ export default function StatsPanel({ eventId, initialRequests }: Props) {
                     <p className="text-white text-sm font-semibold truncate">
                       {t.title}
                     </p>
-                    <p className="text-white/40 text-xs truncate">{t.artist}</p>
+                    <p className="text-white/40 text-xs truncate">
+                      {t.artist}
+                      {t.artistTotal > 1 && (
+                        <span className="text-neon-pink/80 ml-1">
+                          · {t.artistTotal}× insgesamt
+                        </span>
+                      )}
+                    </p>
                   </div>
                   <span className="text-neon-cyan text-sm font-bold flex-shrink-0">
                     {t.count}×
@@ -350,29 +359,7 @@ function calculateStats(requests: SongRequest[]): Stats {
   const pending = requests.filter((r) => r.status === "pending").length;
   const rejected = requests.filter((r) => r.status === "rejected").length;
 
-  // Top Tracks: gruppiert nach spotify_track_id
-  const trackMap = new Map<string, TrackStat>();
-  for (const r of requests) {
-    const existing = trackMap.get(r.spotify_track_id);
-    if (existing) {
-      existing.count++;
-      if (r.status === "played") existing.played++;
-    } else {
-      trackMap.set(r.spotify_track_id, {
-        id: r.spotify_track_id,
-        title: r.title,
-        artist: r.artist,
-        cover_url: r.cover_url,
-        count: 1,
-        played: r.status === "played" ? 1 : 0
-      });
-    }
-  }
-  const allTracks = Array.from(trackMap.values()).sort(
-    (a, b) => b.count - a.count
-  );
-
-  // Top Artists: erster Künstler im artist-Feld
+  // Erst: Top Artists berechnen, brauchen wir für sekundäre Track-Sortierung
   const artistMap = new Map<string, number>();
   for (const r of requests) {
     const primary = r.artist.split(",")[0]?.trim();
@@ -383,6 +370,43 @@ function calculateStats(requests: SongRequest[]): Stats {
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 5);
+
+  // Top Tracks: gruppiert nach spotify_track_id
+  const trackMap = new Map<string, TrackStat>();
+  for (const r of requests) {
+    const primaryArtist = r.artist.split(",")[0]?.trim() ?? "";
+    const artistTotal = artistMap.get(primaryArtist) ?? 0;
+    const existing = trackMap.get(r.spotify_track_id);
+    if (existing) {
+      existing.count++;
+      if (r.status === "played") existing.played++;
+      // Jüngster created_at gewinnt — damit "frischere" Wünsche bevorzugt werden
+      if (r.created_at > existing.latestCreatedAt) {
+        existing.latestCreatedAt = r.created_at;
+      }
+    } else {
+      trackMap.set(r.spotify_track_id, {
+        id: r.spotify_track_id,
+        title: r.title,
+        artist: r.artist,
+        cover_url: r.cover_url,
+        count: 1,
+        played: r.status === "played" ? 1 : 0,
+        artistTotal,
+        latestCreatedAt: r.created_at
+      });
+    }
+  }
+
+  // Multi-Level Sort:
+  // 1. Song-Häufigkeit (desc)
+  // 2. Künstler-Gesamthäufigkeit (desc) — Songs aktiver Künstler kommen vor
+  // 3. Datum (desc) — bei Gleichstand: neueste zuerst
+  const allTracks = Array.from(trackMap.values()).sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    if (b.artistTotal !== a.artistTotal) return b.artistTotal - a.artistTotal;
+    return b.latestCreatedAt.localeCompare(a.latestCreatedAt);
+  });
 
   const acceptanceRate =
     total > 0 ? Math.round(((approved + played) / total) * 100) : 0;
