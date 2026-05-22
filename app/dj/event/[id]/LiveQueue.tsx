@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import type { SongRequest, RequestStatus } from "@/lib/types";
@@ -30,12 +30,63 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
   const [requests, setRequests] = useState<SongRequest[]>(initialRequests);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast>(null);
+  // Tracks die schon als "gespielt" automatisch markiert wurden — verhindert
+  // doppelte Updates während ein langer Track läuft.
+  const autoMarkedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 5000);
     return () => clearTimeout(t);
   }, [toast]);
+
+  // Auto-Mark-As-Played: pollt Spotify Now-Playing und matched gegen
+  // angenommene Wünsche. Wenn der Track läuft -> setze status="played".
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkNowPlaying() {
+      if (cancelled) return;
+      try {
+        const res = await fetch("/api/spotify/now-playing", { cache: "no-store" });
+        const data = await res.json();
+        if (!data?.playing || !data?.track?.id) return;
+
+        const currentSpotifyId = data.track.id as string;
+        // Schon mal auto-marked? Skip.
+        if (autoMarkedRef.current.has(currentSpotifyId)) return;
+
+        // Suche angenommenen Wunsch mit dieser Spotify-ID
+        const match = requests.find(
+          (r) =>
+            r.status === "approved" &&
+            r.spotify_track_id === currentSpotifyId
+        );
+        if (!match) return;
+
+        // Markiere als "played"
+        autoMarkedRef.current.add(currentSpotifyId);
+        const supabase = createClient();
+        await supabase
+          .from("song_requests")
+          .update({ status: "played" })
+          .eq("id", match.id);
+        setToast({
+          kind: "ok",
+          text: `Automatisch als gespielt markiert: ${match.title}`
+        });
+      } catch {}
+    }
+
+    checkNowPlaying();
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") checkNowPlaying();
+    }, 10000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [requests]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -193,7 +244,22 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
                   />
                 </>
               )}
-              {(req.status === "rejected" || req.status === "played") && (
+              {req.status === "played" && (
+                <>
+                  <ActionButton
+                    label={busy === req.id ? "…" : "↻ Nochmal queuen"}
+                    style="text-[#1DB954] border-[#1DB954]/40 hover:bg-[#1DB954]/10"
+                    onClick={() => approveAndQueue(req)}
+                    disabled={busy === req.id}
+                  />
+                  <ActionButton
+                    label="↩ Zurücksetzen"
+                    style="text-white/30 border-white/10 hover:bg-white/5"
+                    onClick={() => updateStatus(req.id, "pending")}
+                  />
+                </>
+              )}
+              {req.status === "rejected" && (
                 <ActionButton
                   label="↩ Zurücksetzen"
                   style="text-white/30 border-white/10 hover:bg-white/5"
