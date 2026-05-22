@@ -82,11 +82,17 @@ export default function SettingsForm({ initialProfile, userEmail }: Props) {
       {/* Trinkgeld-Block */}
       <fieldset className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
         <legend className="px-3 text-white/60 text-xs uppercase tracking-widest">
-          Trinkgeld — Bank-Überweisung
+          Geschenk-Bank-Daten
         </legend>
-        <p className="text-white/40 text-xs mt-2 mb-5">
+        <p className="text-white/40 text-xs mt-2 mb-2">
           Daten werden für einen SEPA-QR-Code auf der Gäste-Seite generiert. Gäste
-          scannen mit ihrer Banking-App → Trinkgeld in 2 Klicks per Überweisung.
+          scannen mit ihrer Banking-App → freiwillige Überweisung in 2 Klicks.
+        </p>
+        <p className="text-white/30 text-xs mb-5 leading-relaxed">
+          💡 Verwendungszweck ist absichtlich als „Geschenk an [Name]"
+          formuliert — gilt rechtlich als private Schenkung. Für Hobby-DJs ohne
+          Gewerbe sauber, da keine Dienstleistungs-Implikation. Schenkungen sind
+          bis 20.000 €/Person über 10 Jahre steuerfrei.
         </p>
 
         <div className="flex flex-col gap-4">

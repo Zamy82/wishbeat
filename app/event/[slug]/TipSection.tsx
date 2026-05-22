@@ -31,6 +31,10 @@ export default function TipSection({
       ? amount
       : parseFloat(customAmount.replace(",", ".")) || 0;
 
+  // Verwendungszweck als "Geschenk" formuliert — rechtssicher als private
+  // Schenkung erkennbar (keine Dienstleistungs-Implikation wie bei "Trinkgeld").
+  const purpose = `Geschenk an ${djDisplayName}`;
+
   useEffect(() => {
     if (!canvasRef.current) return;
     const data = buildGiroCodeData({
@@ -38,7 +42,7 @@ export default function TipSection({
       iban,
       bic: bic ?? undefined,
       amount: effectiveAmount > 0 ? effectiveAmount : undefined,
-      purpose: `Trinkgeld ${djDisplayName} — ${eventName}`
+      purpose
     });
     QRCode.toCanvas(canvasRef.current, data, {
       width: 280,
@@ -46,17 +50,19 @@ export default function TipSection({
       color: { dark: "#0a0a12", light: "#ffffff" },
       errorCorrectionLevel: "M"
     });
-  }, [ibanHolder, iban, bic, effectiveAmount, djDisplayName, eventName]);
+    // eventName ist nicht mehr im purpose enthalten — keine Dep nötig
+  }, [ibanHolder, iban, bic, effectiveAmount, djDisplayName, purpose]);
 
   return (
     <section className="w-full max-w-md mt-12 mb-4">
       <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
         <div className="text-center mb-5">
           <h3 className="text-xl font-bold text-white">
-            💚 Trinkgeld für {djDisplayName}
+            💚 Danke an {djDisplayName}
           </h3>
           <p className="text-white/50 text-sm mt-1">
-            Gefällt dir der Abend? Freu den DJ — komplett freiwillig.
+            Gefällt dir der Abend? Sag &bdquo;Danke&ldquo; mit einem freiwilligen
+            Betrag — komplett auf privater Schenk-Basis.
           </p>
         </div>
 
@@ -120,7 +126,7 @@ export default function TipSection({
                 <span className="text-white font-semibold">
                   {effectiveAmount.toFixed(2)} €
                 </span>{" "}
-                an {djDisplayName}
+                als Geschenk an {djDisplayName}
               </>
             )}
           </p>
@@ -154,9 +160,7 @@ export default function TipSection({
               </>
             )}
             <dt className="text-white/40">Verw.zweck</dt>
-            <dd className="text-white/80">
-              Trinkgeld {djDisplayName} — {eventName}
-            </dd>
+            <dd className="text-white/80">{purpose}</dd>
           </dl>
         )}
       </div>
