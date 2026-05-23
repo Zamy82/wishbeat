@@ -56,6 +56,44 @@ export default function AssistantClient() {
   const lastTrackIdRef = useRef<string | null>(null);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // KI-Vorschlaege (manuell per Button getriggert)
+  const [aiSuggestions, setAiSuggestions] = useState<
+    | {
+        title: string;
+        artist: string;
+        reason: string;
+        spotify_track_id: string;
+        cover_url: string | null;
+        album: string | null;
+      }[]
+    | null
+  >(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  async function loadAiSuggestions() {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await fetch("/api/ai/suggest-next", { method: "POST" });
+      const data = await res.json();
+      if (!data.ok) {
+        setAiError(data.message ?? "KI-Anfrage fehlgeschlagen.");
+        setAiSuggestions(null);
+        return;
+      }
+      // Filter: nur Vorschlaege mit echter Spotify-Track-ID
+      const valid = (data.suggestions ?? []).filter(
+        (s: { spotify_track_id: string | null }) => s.spotify_track_id
+      );
+      setAiSuggestions(valid);
+    } catch (e) {
+      setAiError(`Netzwerk-Fehler: ${(e as Error).message ?? "unbekannt"}`);
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
   const fetchSuggestionsForTrack = useCallback(async (track: NowPlayingTrack) => {
     const firstArtist = track.artist.split(",")[0]?.trim() ?? "";
 
@@ -297,6 +335,109 @@ export default function AssistantClient() {
           )}
         </section>
       )}
+
+      {/* KI-Vorschläge — auf Knopfdruck */}
+      <section className="mt-8">
+        <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+          <h2 className="text-xs uppercase tracking-widest text-white/40 flex items-center gap-2">
+            <span className="text-base">🤖</span>
+            KI-Vorschläge
+            <span className="text-white/30 normal-case tracking-normal font-normal">
+              (passend zum aktuellen Track + Vibe)
+            </span>
+          </h2>
+          <button
+            onClick={loadAiSuggestions}
+            disabled={aiLoading || !playing}
+            className="px-4 py-2 rounded-full bg-gradient-to-r from-neon-purple to-neon-pink text-white text-xs font-semibold hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition"
+            title={!playing ? "Spotify muss spielen für KI-Vorschläge" : "Frag die KI nach passenden nächsten Songs"}
+          >
+            {aiLoading ? "KI denkt…" : "🪄 KI fragen"}
+          </button>
+        </div>
+
+        {aiError && (
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300 mb-3">
+            {aiError}
+          </div>
+        )}
+
+        {!aiSuggestions && !aiLoading && !aiError && (
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-center">
+            <p className="text-white/40 text-sm">
+              Klick auf <span className="text-white/70">„KI fragen"</span>, dann schlägt Claude dir 5-8 passende Songs vor — basierend auf dem aktuellen Track und den letzten Plays.
+            </p>
+            <p className="text-white/30 text-xs mt-2">~0,3 Cent pro Klick</p>
+          </div>
+        )}
+
+        {aiLoading && (
+          <div className="rounded-3xl bg-white/5 border border-white/10 p-6 animate-pulse">
+            <div className="h-4 bg-white/10 rounded w-1/3 mb-3" />
+            <div className="space-y-2">
+              <div className="h-14 bg-white/5 rounded-xl" />
+              <div className="h-14 bg-white/5 rounded-xl" />
+              <div className="h-14 bg-white/5 rounded-xl" />
+            </div>
+          </div>
+        )}
+
+        {aiSuggestions && aiSuggestions.length > 0 && (
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {aiSuggestions.map((s) => (
+              <li
+                key={s.spotify_track_id}
+                className="flex items-start gap-3 rounded-2xl border border-neon-purple/30 bg-gradient-to-br from-neon-purple/10 to-neon-pink/5 hover:border-neon-purple/60 p-3 transition"
+              >
+                {s.cover_url && (
+                  <Image
+                    src={s.cover_url}
+                    alt={s.album ?? s.title}
+                    width={56}
+                    height={56}
+                    className="rounded-lg flex-shrink-0"
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-white font-semibold truncate text-sm">
+                    {s.title}
+                  </p>
+                  <p className="text-white/50 text-xs truncate">{s.artist}</p>
+                  <p className="text-neon-purple/80 text-xs mt-1 italic">
+                    💡 {s.reason}
+                  </p>
+                </div>
+                <button
+                  onClick={() =>
+                    queueTrack({
+                      id: s.spotify_track_id,
+                      title: s.title,
+                      artist: s.artist,
+                      artist_id: null,
+                      album: s.album ?? "",
+                      cover_url: s.cover_url,
+                      duration_ms: 0,
+                      uri: `spotify:track:${s.spotify_track_id}`
+                    })
+                  }
+                  disabled={queueBusy === s.spotify_track_id}
+                  className="flex-shrink-0 px-3 py-2 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-wait transition"
+                >
+                  {queueBusy === s.spotify_track_id ? "…" : "+ Queue"}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {aiSuggestions && aiSuggestions.length === 0 && (
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-center">
+            <p className="text-white/40 text-sm">
+              Keine verwendbaren Vorschläge — Claude konnte keine Songs nennen, die auf Spotify gefunden wurden. Versuch's nochmal.
+            </p>
+          </div>
+        )}
+      </section>
 
       {/* Suche */}
       <section className="mt-8">

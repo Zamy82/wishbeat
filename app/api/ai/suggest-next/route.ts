@@ -1,0 +1,265 @@
+import { NextRequest, NextResponse } from "next/server";
+import Anthropic from "@anthropic-ai/sdk";
+import { createClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { getValidAccessToken } from "@/lib/spotify-user";
+import { searchTracks, getGenresByArtistName } from "@/lib/spotify";
+import { computeVibeTokens } from "@/lib/vibe-match";
+
+// KI-Vorschlaege: aus aktuellem Spotify-Track + Vibe-Kontext schlaegt
+// Claude Haiku 4.5 passende naechste Songs vor. Wir reichern jeden
+// Vorschlag dann mit echten Spotify-Suchtreffern an, damit der DJ
+// direkt in die Queue pushen kann.
+
+interface PlayRow {
+  spotify_track_id: string;
+  title: string;
+  artist: string;
+  artist_genres?: string[] | null;
+  played_at: string;
+}
+
+interface AISuggestion {
+  title: string;
+  artist: string;
+  reason: string;
+}
+
+interface EnrichedSuggestion extends AISuggestion {
+  spotify_track_id: string | null;
+  cover_url: string | null;
+  album: string | null;
+}
+
+function adminClient() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+}
+
+const SYSTEM_PROMPT = `Du bist ein erfahrener DJ-Assistent für deutsche Partys (Hochzeiten, Geburtstage, Oktoberfest, Firmenfeiern).
+
+Deine Aufgabe: 5-8 passende Songs vorschlagen, die nach dem aktuellen Track gut funktionieren würden.
+
+Berücksichtige beim Vorschlagen:
+- Genre und Stimmung des aktuellen Songs
+- Energie-Level (aufbauen, halten, oder weicher übergehen)
+- Was zuletzt gelaufen ist (nicht zu schnell wiederholen, aber Kontinuität wahren)
+- Deutsches Party-Publikum (Schlager, Pop, Hip-Hop, Latin, 90er, Après-Ski — alles möglich)
+
+Output-Regeln:
+- Antworte AUSSCHLIESSLICH mit einem JSON-Objekt — kein Begleittext, kein Markdown-Code-Block, nur reines JSON.
+- Format: {"suggestions": [{"title": "...", "artist": "...", "reason": "..."}, ...]}
+- 5 bis 8 Vorschläge.
+- Schlage NUR Songs vor, die wirklich auf Spotify existieren (echte, populäre Tracks).
+- Bevorzuge Songs, die in Deutschland bekannt sind.
+- Mische sichere Auswahl (ähnlich) mit ein bis zwei mutigeren Übergängen.
+- "reason" auf Deutsch, max. 80 Zeichen, knapp und konkret (z.B. "Schlager-Klassiker, hält Energie", "Wechsel zu 90ern, Tanzfläche füllt sich").
+- Künstlernamen genau wie auf Spotify gelistet (z.B. "Helene Fischer", nicht "Fischer, Helene").`;
+
+export async function POST(_req: NextRequest) {
+  // Auth: DJ muss eingeloggt sein
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json(
+      { ok: false, message: "Nicht eingeloggt." },
+      { status: 401 }
+    );
+  }
+
+  // API-Key checken
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return NextResponse.json({
+      ok: false,
+      message: "Anthropic API-Key nicht konfiguriert. Bitte in Vercel als ANTHROPIC_API_KEY setzen."
+    }, { status: 500 });
+  }
+
+  // Aktuellen Spotify-Track holen
+  const spotifyToken = await getValidAccessToken();
+  if (!spotifyToken) {
+    return NextResponse.json({
+      ok: false,
+      message: "Spotify ist nicht verbunden. Verbinde Spotify zuerst."
+    });
+  }
+
+  const npRes = await fetch(
+    "https://api.spotify.com/v1/me/player/currently-playing?market=DE",
+    { headers: { Authorization: `Bearer ${spotifyToken}` }, cache: "no-store" }
+  );
+
+  if (npRes.status === 204 || !npRes.ok) {
+    return NextResponse.json({
+      ok: false,
+      message: "Spotify spielt gerade nichts. Starte einen Song zuerst."
+    });
+  }
+
+  interface NowPlaying {
+    item: {
+      name: string;
+      artists: { name: string }[];
+    } | null;
+  }
+  const npData = (await npRes.json()) as NowPlaying;
+  if (!npData.item) {
+    return NextResponse.json({
+      ok: false,
+      message: "Kein aktueller Spotify-Track gefunden."
+    });
+  }
+  const currentTitle = npData.item.name;
+  const currentArtist = npData.item.artists.map((a) => a.name).join(", ");
+
+  // Aktuelles Event finden (das neueste aktive Event des DJs)
+  const admin = adminClient();
+  const { data: activeEvent } = await admin
+    .from("events")
+    .select("id")
+    .eq("owner_id", user.id)
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  // Letzte ~10 Plays aus dem aktiven Event laden (fuer Kontext)
+  let recentPlays: PlayRow[] = [];
+  if (activeEvent) {
+    const { data: plays } = await admin
+      .from("event_plays")
+      .select("spotify_track_id, title, artist, artist_genres, played_at")
+      .eq("event_id", activeEvent.id)
+      .order("played_at", { ascending: false })
+      .limit(10);
+    recentPlays = (plays ?? []) as PlayRow[];
+  }
+
+  // Vibe-Tags aus den Recent-Plays berechnen (oder live von MusicBrainz)
+  const playsGenresLists: string[][] = await Promise.all(
+    recentPlays.map(async (p) => {
+      if (Array.isArray(p.artist_genres) && p.artist_genres.length > 0) {
+        return p.artist_genres;
+      }
+      try {
+        return await getGenresByArtistName(p.artist);
+      } catch {
+        return [];
+      }
+    })
+  );
+  const vibeTokens = computeVibeTokens(playsGenresLists);
+  const topVibeWords = Object.entries(vibeTokens)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([word]) => word);
+
+  // Genres des aktuellen Tracks
+  let currentGenres: string[] = [];
+  try {
+    currentGenres = await getGenresByArtistName(currentArtist);
+  } catch {}
+
+  // User-Message bauen
+  const recentList = recentPlays
+    .slice(0, 8)
+    .map((p, i) => `${i + 1}. "${p.title}" — ${p.artist}`)
+    .join("\n");
+
+  const userMessage = `Aktuell läuft: "${currentTitle}" — ${currentArtist}${currentGenres.length > 0 ? ` (Genre-Tags: ${currentGenres.slice(0, 5).join(", ")})` : ""}
+
+${recentPlays.length > 0
+  ? `Letzte gespielte Songs (neueste zuerst):\n${recentList}`
+  : "Bisher noch keine anderen Songs auf dieser Party gespielt."}
+
+${topVibeWords.length > 0
+  ? `Aktuelle Vibe-Wörter (aus letzten Plays): ${topVibeWords.join(", ")}`
+  : ""}
+
+Schlage 5-8 Songs vor, die als nächstes gut passen würden.`;
+
+  // Claude Haiku 4.5 aufrufen
+  const anthropic = new Anthropic();
+
+  try {
+    const message = await anthropic.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 2048,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userMessage }]
+    });
+
+    // Antwort parsen — System-Prompt erzwingt reines JSON
+    const textBlock = message.content.find((b) => b.type === "text");
+    if (!textBlock || textBlock.type !== "text") {
+      return NextResponse.json({
+        ok: false,
+        message: "Keine Text-Antwort von KI bekommen."
+      });
+    }
+
+    // Falls Claude doch mal einen ```json-Block schickt, robust extrahieren
+    let jsonText = textBlock.text.trim();
+    const codeBlockMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) jsonText = codeBlockMatch[1].trim();
+
+    let parsed: { suggestions: AISuggestion[] };
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch {
+      return NextResponse.json({
+        ok: false,
+        message: "KI-Antwort konnte nicht geparst werden.",
+        raw: textBlock.text.slice(0, 500)
+      });
+    }
+
+    // Pro Vorschlag: Spotify-Search → echte Track-Daten holen
+    const enriched: EnrichedSuggestion[] = await Promise.all(
+      (parsed.suggestions ?? []).slice(0, 8).map(async (s) => {
+        try {
+          const query = `${s.title} ${s.artist}`;
+          const tracks = await searchTracks(query, 1);
+          const t = tracks[0];
+          return {
+            ...s,
+            spotify_track_id: t?.id ?? null,
+            cover_url: t?.cover_url ?? null,
+            album: t?.album ?? null
+          };
+        } catch {
+          return {
+            ...s,
+            spotify_track_id: null,
+            cover_url: null,
+            album: null
+          };
+        }
+      })
+    );
+
+    // Nur Vorschlaege mit gefundener Spotify-ID zurueckgeben
+    const usable = enriched.filter((s) => s.spotify_track_id);
+
+    return NextResponse.json({
+      ok: true,
+      currentTrack: { title: currentTitle, artist: currentArtist },
+      suggestions: usable,
+      droppedCount: enriched.length - usable.length,
+      usage: {
+        input_tokens: message.usage.input_tokens,
+        output_tokens: message.usage.output_tokens
+      }
+    });
+  } catch (e) {
+    const err = e as { status?: number; message?: string };
+    return NextResponse.json({
+      ok: false,
+      message: `KI-Fehler: ${err.message ?? String(e)}`,
+      code: err.status
+    }, { status: 500 });
+  }
+}
