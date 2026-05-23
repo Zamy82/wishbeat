@@ -20,12 +20,16 @@ export async function GET(request: NextRequest) {
 
   try {
     const tracks = await searchTracks(q, limit, offset);
+    // Wenn leer trotz Query mit >=2 Zeichen: wahrscheinlich Rate-Limit oder Auth-Issue
+    if (tracks.length === 0) {
+      console.warn(`[spotify-search] empty result for q="${q}" — likely 429 or auth`);
+    }
     return NextResponse.json({ tracks });
   } catch (err) {
     console.error("Spotify search error:", err);
     return NextResponse.json(
-      { error: "Songsuche nicht verfügbar" },
-      { status: 503 }
+      { tracks: [], error: "Songsuche temporaer nicht verfuegbar (Spotify Rate-Limit). Bitte 1 Minute warten." },
+      { status: 200 }
     );
   }
 }

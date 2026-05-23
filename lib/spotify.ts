@@ -57,7 +57,8 @@ async function searchOnce(
   token: string,
   query: string,
   limit: number,
-  offset: number
+  offset: number,
+  attempt = 1
 ): Promise<SpotifyApiTrack[]> {
   const url = new URL("https://api.spotify.com/v1/search");
   url.searchParams.set("q", query);
@@ -68,9 +69,25 @@ async function searchOnce(
 
   const res = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${token}` },
-    next: { revalidate: 60 }
+    cache: "no-store"
   });
-  if (!res.ok) return [];
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error(`[spotify-search] ${res.status} ${res.statusText} attempt=${attempt} q=${query} body=${body.slice(0, 200)}`);
+    // Bei 429 (Rate-Limit): einmal mit kleinem Delay retrien
+    if (res.status === 429 && attempt < 2) {
+      const retryAfter = parseInt(res.headers.get("retry-after") ?? "1", 10);
+      await new Promise((r) => setTimeout(r, Math.min(retryAfter, 3) * 1000));
+      return searchOnce(token, query, limit, offset, attempt + 1);
+    }
+    // Bei 401 (Token abgelaufen): Cache leeren + einmal mit frischem Token
+    if (res.status === 401 && attempt < 2) {
+      cache = null;
+      const freshToken = await getAccessToken();
+      return searchOnce(freshToken, query, limit, offset, attempt + 1);
+    }
+    return [];
+  }
   const data = await res.json();
   return data.tracks.items as SpotifyApiTrack[];
 }
