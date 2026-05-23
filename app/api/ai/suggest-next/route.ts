@@ -41,23 +41,46 @@ function adminClient() {
 
 const SYSTEM_PROMPT = `Du bist ein erfahrener DJ-Assistent für deutsche Partys (Hochzeiten, Geburtstage, Oktoberfest, Firmenfeiern).
 
-Deine Aufgabe: 5-8 passende Songs vorschlagen, die nach dem aktuellen Track gut funktionieren würden.
+Deine Aufgabe: 6-8 passende Songs vorschlagen, die DIREKT nach dem aktuellen Track gut funktionieren.
 
-Berücksichtige beim Vorschlagen:
-- Genre und Stimmung des aktuellen Songs
-- Energie-Level (aufbauen, halten, oder weicher übergehen)
-- Was zuletzt gelaufen ist (nicht zu schnell wiederholen, aber Kontinuität wahren)
-- Deutsches Party-Publikum (Schlager, Pop, Hip-Hop, Latin, 90er, Après-Ski — alles möglich)
+═══ HARTE REGELN — NICHT VERHANDELBAR ═══
 
-Output-Regeln:
-- Antworte AUSSCHLIESSLICH mit einem JSON-Objekt — kein Begleittext, kein Markdown-Code-Block, nur reines JSON.
-- Format: {"suggestions": [{"title": "...", "artist": "...", "reason": "..."}, ...]}
-- 5 bis 8 Vorschläge.
-- Schlage NUR Songs vor, die wirklich auf Spotify existieren (echte, populäre Tracks).
-- Bevorzuge Songs, die in Deutschland bekannt sind.
-- Mische sichere Auswahl (ähnlich) mit ein bis zwei mutigeren Übergängen.
-- "reason" auf Deutsch, max. 80 Zeichen, knapp und konkret (z.B. "Schlager-Klassiker, hält Energie", "Wechsel zu 90ern, Tanzfläche füllt sich").
-- Künstlernamen genau wie auf Spotify gelistet (z.B. "Helene Fischer", nicht "Fischer, Helene").`;
+REGEL 1 — KÜNSTLER-FOKUS (wichtigste Regel!):
+- Schlage **mindestens 2 weitere Songs des aktuellen Künstlers** vor.
+- Beispiel: Läuft "Atemlos" von Helene Fischer → schlage z.B. "Achterbahn" und "Phänomen" von Helene Fischer vor.
+- Diese 2 Künstler-Songs müssen die ersten Vorschläge in der Liste sein.
+
+REGEL 2 — GENRE-TREUE:
+- Mindestens **80% deiner Vorschläge müssen das gleiche Genre** haben wie der aktuelle Track.
+- Schlager-Song → fast nur Schlager-Songs vorschlagen (Roland Kaiser, Andrea Berg, Andreas Gabalier, Mickie Krause, Wolfgang Petry, Matthias Reim, Helene Fischer, Eloy de Jong, Beatrice Egli, Vanessa Mai, …)
+- 90er-Pop → 90er-Pop
+- Hip-Hop → Hip-Hop
+- KEINE Genre-Sprünge! Kein englischer Rock nach deutschem Schlager.
+
+REGEL 3 — SPRACHE:
+- Aktueller Song ist deutschsprachig → **alle Vorschläge auf Deutsch**.
+- Aktueller Song ist englischsprachig → Englisch.
+
+REGEL 4 — MAX 1 ÜBERGANGS-SONG:
+- Maximal EIN Vorschlag darf eine sanfte Brücke zu einem verwandten Genre sein (z.B. von Schlager zu Partyschlager/Ballermann, oder von 80er-Pop zu 90er-Pop).
+- Alle anderen müssen voll im Stil bleiben.
+
+REGEL 5 — KEINE WIEDERHOLUNGEN:
+- Wenn ein Song in den "Letzte gespielte Songs" steht, nicht erneut vorschlagen.
+
+═══ OUTPUT-FORMAT ═══
+
+Antworte AUSSCHLIESSLICH mit reinem JSON, kein Markdown, kein Begleittext.
+Format: {"suggestions": [{"title": "...", "artist": "...", "reason": "..."}, ...]}
+
+- 6 bis 8 Vorschläge.
+- Schlage NUR echte, auf Spotify auffindbare Songs vor.
+- Künstlernamen wie auf Spotify (z.B. "Helene Fischer", nicht "Fischer, Helene").
+- "reason" auf Deutsch, max 70 Zeichen, sehr konkret:
+  * "Vom selben Künstler — direkter Anschluss"
+  * "Schlager-Hit, hält Energie und Stimmung"
+  * "Übergang zu Mickie Krause für mehr Party-Tempo"
+- Die ersten zwei Vorschläge sollen vom GLEICHEN Künstler wie der aktuelle Track sein.`;
 
 export async function POST(_req: NextRequest) {
   // Auth: DJ muss eingeloggt sein
@@ -163,23 +186,36 @@ export async function POST(_req: NextRequest) {
     currentGenres = await getGenresByArtistName(currentArtist);
   } catch {}
 
+  // Primaerer Kuenstler (vor Komma)
+  const primaryArtist = currentArtist.split(",")[0].trim();
+
   // User-Message bauen
   const recentList = recentPlays
     .slice(0, 8)
     .map((p, i) => `${i + 1}. "${p.title}" — ${p.artist}`)
     .join("\n");
 
-  const userMessage = `Aktuell läuft: "${currentTitle}" — ${currentArtist}${currentGenres.length > 0 ? ` (Genre-Tags: ${currentGenres.slice(0, 5).join(", ")})` : ""}
+  const userMessage = `═══ AKTUELLER TRACK ═══
+Titel: "${currentTitle}"
+Künstler: ${currentArtist}
+${currentGenres.length > 0 ? `Genre-Tags: ${currentGenres.slice(0, 5).join(", ")}` : ""}
 
+═══ KONTEXT ═══
 ${recentPlays.length > 0
-  ? `Letzte gespielte Songs (neueste zuerst):\n${recentList}`
+  ? `Letzte gespielte Songs (NICHT erneut vorschlagen!):\n${recentList}`
   : "Bisher noch keine anderen Songs auf dieser Party gespielt."}
 
 ${topVibeWords.length > 0
-  ? `Aktuelle Vibe-Wörter (aus letzten Plays): ${topVibeWords.join(", ")}`
+  ? `Aktuelle Vibe-Wörter aus letzten Plays: ${topVibeWords.join(", ")}`
   : ""}
 
-Schlage 5-8 Songs vor, die als nächstes gut passen würden.`;
+═══ ANFORDERUNG ═══
+Schlage 6-8 Songs vor, die nach "${currentTitle}" gut funktionieren.
+
+PFLICHT:
+- Vorschlag 1 und 2 MÜSSEN andere bekannte Songs von **${primaryArtist}** sein (nicht der aktuelle Track!).
+- Restliche Vorschläge im gleichen Genre/Stil wie der aktuelle Track.
+- Maximal EIN Vorschlag darf in ein verwandtes Genre wechseln.`;
 
   // Claude Haiku 4.5 aufrufen
   const anthropic = new Anthropic();
