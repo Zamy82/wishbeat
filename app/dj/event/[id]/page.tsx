@@ -104,12 +104,6 @@ export default async function DjEventPage({ params }: Props) {
           >
             🎛️ DJ-Assistent öffnen
           </Link>
-          <Link
-            href="/dj/soundboard"
-            className="px-4 py-2 rounded-full border border-white/20 text-white/80 hover:text-white hover:border-white/40 text-sm transition"
-          >
-            🔊 Soundboard
-          </Link>
         </div>
       </header>
 
