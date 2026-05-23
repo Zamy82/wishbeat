@@ -92,11 +92,30 @@ async function searchOnce(
   return data.tracks.items as SpotifyApiTrack[];
 }
 
+// In-Memory-Cache fuer Search-Ergebnisse — schont das Spotify-Rate-Limit.
+// Nur erfolgreiche Antworten werden gecached (leere/429er werden nicht gespeichert).
+interface SearchCacheEntry {
+  tracks: SearchedTrack[];
+  cachedAt: number;
+}
+const searchCache = new Map<string, SearchCacheEntry>();
+const SEARCH_CACHE_TTL_MS = 5 * 60 * 1000; // 5 Minuten
+
 export async function searchTracks(
   query: string,
   totalLimit = 8,
   startOffset = 0
 ): Promise<SearchedTrack[]> {
+  const cacheKey = `${query.toLowerCase()}|${totalLimit}|${startOffset}`;
+  const cached = searchCache.get(cacheKey);
+  if (
+    cached &&
+    Date.now() - cached.cachedAt < SEARCH_CACHE_TTL_MS &&
+    cached.tracks.length > 0
+  ) {
+    return cached.tracks;
+  }
+
   const token = await getAccessToken();
 
   // Wenn ≤ 10 reichen, ein Call. Sonst parallele Calls mit offsets.
@@ -127,7 +146,11 @@ export async function searchTracks(
     });
   }
 
-  return unique.slice(0, totalLimit);
+  const final = unique.slice(0, totalLimit);
+  if (final.length > 0) {
+    searchCache.set(cacheKey, { tracks: final, cachedAt: Date.now() });
+  }
+  return final;
 }
 
 interface SpotifyApiTrack {
