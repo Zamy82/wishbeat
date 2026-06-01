@@ -46,6 +46,8 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
   const [vibePlayCount, setVibePlayCount] = useState(0);
   // raw = wie viele Plays insgesamt im event_plays-Fenster, auch ohne Genre-Tags
   const [vibeRawPlayCount, setVibeRawPlayCount] = useState(0);
+  // Vote-Counts pro Wunsch
+  const [voteCounts, setVoteCounts] = useState<Record<string, number>>({});
   // Match-% pro Track-ID — vom Server berechnet (funktioniert auch ohne
   // DB-Migration, da der Server Genres direkt von Spotify holt)
   const [matches, setMatches] = useState<Record<string, number>>({});
@@ -234,6 +236,40 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
     return () => { supabase.removeChannel(channel); };
   }, [eventId]);
 
+  // Vote-Counts: lade aggregierte Vote-Zaehlung pro Wunsch + Realtime-Updates
+  useEffect(() => {
+    const supabase = createClient();
+
+    async function loadVoteCounts() {
+      // Alle Wunsch-IDs in diesem Event
+      const requestIds = requests.map((r) => r.id);
+      if (requestIds.length === 0) {
+        setVoteCounts({});
+        return;
+      }
+      const { data } = await supabase
+        .from("song_request_votes")
+        .select("request_id")
+        .in("request_id", requestIds);
+      const counts: Record<string, number> = {};
+      for (const row of (data ?? []) as { request_id: string }[]) {
+        counts[row.request_id] = (counts[row.request_id] ?? 0) + 1;
+      }
+      setVoteCounts(counts);
+    }
+
+    loadVoteCounts();
+    const channel = supabase
+      .channel(`votes-${eventId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "song_request_votes" },
+        () => loadVoteCounts()
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [eventId, requests]);
+
   async function trackCurrentSongNow() {
     try {
       const npRes = await fetch("/api/spotify/now-playing", { cache: "no-store" });
@@ -406,9 +442,15 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
       )}
 
       {requests.length > 0 && (() => {
-        const activeRequests = requests.filter(
-          (r) => r.status === "pending" || r.status === "approved"
-        );
+        const activeRequests = requests
+          .filter((r) => r.status === "pending" || r.status === "approved")
+          .sort((a, b) => {
+            // Heisseste Wuensche zuerst (nach Votes), dann FIFO
+            const va = voteCounts[a.id] ?? 0;
+            const vb = voteCounts[b.id] ?? 0;
+            if (vb !== va) return vb - va;
+            return a.created_at.localeCompare(b.created_at);
+          });
         const playedRequests = requests.filter((r) => r.status === "played");
         const rejectedRequests = requests.filter((r) => r.status === "rejected");
 
@@ -446,6 +488,22 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
                 >
                   {STATUS_LABEL[req.status]}
                 </span>
+                {(req.status === "pending" || req.status === "approved") && (() => {
+                  const vc = voteCounts[req.id] ?? 0;
+                  if (vc === 0) return null;
+                  return (
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full font-bold border flex items-center gap-1 ${
+                        vc >= 3
+                          ? "bg-neon-pink/20 text-neon-pink border-neon-pink/40"
+                          : "bg-white/10 text-white/70 border-white/20"
+                      }`}
+                      title={`${vc} Gast${vc === 1 ? "" : "."}-Vote${vc === 1 ? "" : "s"}`}
+                    >
+                      {vc >= 3 ? "🔥" : "❤️"} {vc}
+                    </span>
+                  );
+                })()}
                 {vibePlayCount >= 1 && typeof serverMatch === "number" && (req.status === "pending" || req.status === "approved") && (
                   <MatchPill percent={serverMatch} />
                 )}
