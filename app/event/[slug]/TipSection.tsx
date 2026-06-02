@@ -30,7 +30,7 @@ export default function TipSection({
 }: Props) {
   const [amount, setAmount] = useState<number | null>(2);
   const [customAmount, setCustomAmount] = useState("");
-  const [method, setMethod] = useState<Method>(hasBank ? "bank" : "paypal");
+  const [method, setMethod] = useState<Method>(hasPaypal ? "paypal" : "bank");
   const [showFull, setShowFull] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -84,17 +84,6 @@ export default function TipSection({
           <div className="grid grid-cols-2 gap-2 mb-5 p-1 rounded-2xl bg-white/5 border border-white/10">
             <button
               type="button"
-              onClick={() => setMethod("bank")}
-              className={`py-2.5 rounded-xl font-semibold text-sm transition ${
-                method === "bank"
-                  ? "bg-white/15 text-white shadow-lg"
-                  : "text-white/50 hover:text-white/80"
-              }`}
-            >
-              🏦 Bank-Überweisung
-            </button>
-            <button
-              type="button"
               onClick={() => setMethod("paypal")}
               className={`py-2.5 rounded-xl font-semibold text-sm transition ${
                 method === "paypal"
@@ -106,6 +95,17 @@ export default function TipSection({
                 <PayPalLogo />
                 PayPal
               </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMethod("bank")}
+              className={`py-2.5 rounded-xl font-semibold text-sm transition ${
+                method === "bank"
+                  ? "bg-white/15 text-white shadow-lg"
+                  : "text-white/50 hover:text-white/80"
+              }`}
+            >
+              🏦 Bank-Überweisung
             </button>
           </div>
         )}
