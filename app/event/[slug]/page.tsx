@@ -5,7 +5,6 @@ import TipSection from "./TipSection";
 import RatingSection from "./RatingSection";
 import LiveQueueDisplay from "./LiveQueueDisplay";
 import WishesVotingList from "./WishesVotingList";
-import PushOnboardingBanner from "./PushOnboardingBanner";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -72,7 +71,6 @@ export default async function EventPage({ params }: Props) {
 
       {event.is_active ? (
         <>
-          <PushOnboardingBanner eventId={event.id} />
           <SongRequestForm eventId={event.id} />
           <div className="mt-8 w-full max-w-md">
             <WishesVotingList eventId={event.id} />
