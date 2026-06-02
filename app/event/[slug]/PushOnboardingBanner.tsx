@@ -4,6 +4,17 @@ import { useEffect, useState } from "react";
 import { subscribeForEvent, isPushSupported } from "@/lib/push-client";
 import { getGuestSessionId } from "@/lib/guest-session";
 
+type BrowserKind = "samsung" | "chrome" | "firefox" | "other";
+
+function detectBrowser(): BrowserKind {
+  if (typeof window === "undefined") return "other";
+  const ua = window.navigator.userAgent;
+  if (/SamsungBrowser/i.test(ua)) return "samsung";
+  if (/Firefox|FxiOS/i.test(ua)) return "firefox";
+  if (/Chrome|CriOS/i.test(ua)) return "chrome";
+  return "other";
+}
+
 type State =
   | { kind: "loading" }
   | { kind: "unsupported" }
@@ -23,12 +34,11 @@ export default function PushOnboardingBanner({ eventId }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const [testFiring, setTestFiring] = useState(false);
 
-  // State beim Mount ermitteln
+  // State beim Mount ermitteln + Auto-Detect wenn Permission sich extern aendert
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     if (!isPushSupported()) {
-      // iOS-Safari ohne PWA-Install hat keine PushAPI im normalen Browser
       const ua = window.navigator.userAgent;
       const isIos = /iPhone|iPad|iPod/i.test(ua);
       if (isIos) {
@@ -45,10 +55,35 @@ export default function PushOnboardingBanner({ eventId }: Props) {
       return;
     }
 
-    const perm = Notification.permission;
-    if (perm === "granted") setState({ kind: "granted" });
-    else if (perm === "denied") setState({ kind: "denied" });
-    else setState({ kind: "default" });
+    function refresh() {
+      const perm = Notification.permission;
+      if (perm === "granted") setState({ kind: "granted" });
+      else if (perm === "denied") setState({ kind: "denied" });
+      else setState({ kind: "default" });
+    }
+    refresh();
+
+    // Permissions-API: feuert "change"-Event sobald der User in den
+    // Browser-Settings die Berechtigung freischaltet — Banner aktualisiert
+    // sich dann automatisch ohne Reload.
+    let perm: PermissionStatus | null = null;
+    (async () => {
+      try {
+        perm = await navigator.permissions.query({ name: "notifications" as PermissionName });
+        perm.addEventListener("change", refresh);
+      } catch {}
+    })();
+
+    // Backup: bei Visibility-Change auch nochmal pruefen
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") refresh();
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      if (perm) perm.removeEventListener("change", refresh);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, []);
 
   async function activate() {
@@ -123,7 +158,9 @@ export default function PushOnboardingBanner({ eventId }: Props) {
         />
       )}
 
-      {state.kind === "denied" && <DeniedReset />}
+      {state.kind === "denied" && (
+        <DeniedReset onRetry={activate} />
+      )}
 
       {state.kind === "error" && (
         <div className="text-center">
@@ -236,23 +273,118 @@ function GrantedState({
   );
 }
 
-function DeniedReset() {
+function DeniedReset({ onRetry }: { onRetry: () => void }) {
+  const [browser, setBrowser] = useState<BrowserKind>("other");
+  const [retrying, setRetrying] = useState(false);
+  const [retryFailed, setRetryFailed] = useState(false);
+
+  useEffect(() => {
+    setBrowser(detectBrowser());
+  }, []);
+
+  async function handleRetry() {
+    setRetrying(true);
+    setRetryFailed(false);
+    // Notification.permission neu auslesen (falls extern geaendert)
+    if (Notification.permission === "granted") {
+      onRetry();
+      return;
+    }
+    // Erneut anfragen — wenn schon denied returnt Browser sofort denied
+    try {
+      const result = await Notification.requestPermission();
+      if (result === "granted") {
+        onRetry();
+      } else {
+        setRetryFailed(true);
+      }
+    } catch {
+      setRetryFailed(true);
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  const steps: Record<BrowserKind, { title: string; steps: React.ReactNode[] }> = {
+    samsung: {
+      title: "Samsung Internet",
+      steps: [
+        <>Unten rechts auf <strong className="text-white">3-Striche-Menü ☰</strong> tippen</>,
+        <>→ <strong className="text-white">Einstellungen</strong> (Zahnrad)</>,
+        <>→ <strong className="text-white">Websites und Downloads</strong></>,
+        <>→ <strong className="text-white">Site-Berechtigungen</strong> → <strong className="text-white">Benachrichtigungen</strong></>,
+        <>Suche <code className="bg-white/10 px-1 rounded text-[10px]">wishbeat-zamy82-s-projects.vercel.app</code> → <strong className="text-white">tippen</strong> → auf <strong className="text-white">„Zulassen"</strong> umstellen</>,
+        <>Komm hier zurück und tipp den Button unten</>
+      ]
+    },
+    chrome: {
+      title: "Chrome",
+      steps: [
+        <>Tippe oben auf das <strong className="text-white">Schloss-Symbol 🔒</strong> neben der URL</>,
+        <>→ <strong className="text-white">„Berechtigungen"</strong> (oder „Einstellungen")</>,
+        <>→ <strong className="text-white">„Benachrichtigungen"</strong> → von <strong className="text-white">„Blockiert"</strong> auf <strong className="text-white">„Zulassen"</strong></>,
+        <>Seite neu laden (Pfeil-Kreis oben rechts)</>,
+        <>Komm hier zurück und tipp den Button unten</>
+      ]
+    },
+    firefox: {
+      title: "Firefox",
+      steps: [
+        <>Tippe auf das <strong className="text-white">Schloss-Symbol 🔒</strong> neben der URL</>,
+        <>→ <strong className="text-white">„Berechtigungen verwalten"</strong></>,
+        <>→ <strong className="text-white">„Benachrichtigungen"</strong> entsperren</>,
+        <>Seite neu laden</>,
+        <>Komm hier zurück und tipp den Button unten</>
+      ]
+    },
+    other: {
+      title: "Dein Browser",
+      steps: [
+        <>Tippe oben auf das <strong className="text-white">Schloss-Symbol 🔒</strong> oder die <strong className="text-white">drei Punkte</strong></>,
+        <>Suche nach <strong className="text-white">„Berechtigungen"</strong> oder <strong className="text-white">„Site-Einstellungen"</strong></>,
+        <>Setze <strong className="text-white">„Benachrichtigungen"</strong> auf <strong className="text-white">„Zulassen"</strong></>,
+        <>Seite neu laden</>,
+        <>Komm hier zurück und tipp den Button unten</>
+      ]
+    }
+  };
+
+  const guide = steps[browser];
+
   return (
     <div>
       <div className="text-center mb-3">
         <div className="text-3xl mb-1">🔕</div>
         <h3 className="text-white font-bold">Push ist blockiert</h3>
-        <p className="text-white/60 text-xs">
-          Du hast Benachrichtigungen früher mal abgelehnt. Reset in 30 Sekunden:
+        <p className="text-white/50 text-[11px]">
+          Erkannt: <span className="text-white/70">{guide.title}</span>
+          {" · "}folge der Anleitung dann tipp den Button unten
         </p>
       </div>
-      <ol className="space-y-1.5 text-xs text-white/70">
-        <li>1. Tippe oben auf das <strong className="text-white">Schloss-Symbol 🔒</strong> neben der URL</li>
-        <li>2. <strong className="text-white">„Cookies und Site-Daten" / „Berechtigungen"</strong></li>
-        <li>3. <strong className="text-white">„Zurücksetzen"</strong> oder Eintrag löschen</li>
-        <li>4. Browser schließen, neu öffnen, Seite nochmal aufrufen</li>
-        <li>5. Hier zurück → diesmal kommt der Erlauben-Dialog</li>
+      <ol className="space-y-2 text-xs">
+        {guide.steps.map((step, i) => (
+          <li key={i} className="flex items-start gap-2 rounded-xl bg-white/5 p-2.5">
+            <span className="text-neon-cyan font-bold text-sm flex-shrink-0">{i + 1}.</span>
+            <span className="text-white/80 flex-1">{step}</span>
+          </li>
+        ))}
       </ol>
+      <button
+        onClick={handleRetry}
+        disabled={retrying}
+        className="w-full mt-3 py-3 rounded-2xl bg-gradient-to-r from-neon-pink to-neon-purple text-white font-bold text-sm shadow-lg active:scale-95 transition disabled:opacity-50"
+      >
+        {retrying ? "⏳ Prüfe…" : "✅ Hab's gemacht — Push aktivieren"}
+      </button>
+      {retryFailed && (
+        <p className="text-yellow-300 text-[11px] mt-2 text-center">
+          Noch blockiert. Hast du Browser danach <strong>komplett geschlossen</strong> und neu geöffnet?
+          Manchmal ist das nötig.
+        </p>
+      )}
+      <p className="text-white/30 text-[10px] mt-3 text-center">
+        💡 Schneller: Eine andere Person hat dieses Problem nicht — du nur weil du heute schon getestet hast.
+      </p>
     </div>
   );
 }
