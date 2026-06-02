@@ -195,32 +195,42 @@ export default function WishesVotingList({ eventId }: Props) {
               </p>
               <p className="text-white/50 text-xs truncate">
                 {w.artist}
-                {w.guest_nickname && (
+                {w.guest_nickname && !w.isOwn && (
                   <>
                     {" · "}
                     <span className="text-white/30">
                       von {w.guest_nickname}
-                      {w.isOwn && " (du)"}
                     </span>
                   </>
                 )}
               </p>
             </div>
-            <button
-              onClick={() => toggleVote(w.id)}
-              disabled={busyWishId === w.id || w.isOwn || !sessionId}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-bold border transition flex-shrink-0 ${
-                w.userVoted
-                  ? "bg-neon-pink/20 text-neon-pink border-neon-pink/50"
-                  : "bg-white/5 text-white/70 border-white/10 hover:bg-white/10 hover:border-white/30"
-              } ${w.isOwn ? "opacity-50 cursor-not-allowed" : ""} ${
-                busyWishId === w.id ? "opacity-50 cursor-wait" : ""
-              }`}
-              title={w.isOwn ? "Dein eigener Wunsch" : w.userVoted ? "Vote zurücknehmen" : "Diesen Wunsch pushen"}
-            >
-              <span className="text-base leading-none">{w.userVoted ? "❤️" : "🤍"}</span>
-              <span className="font-mono text-xs">{w.voteCount}</span>
-            </button>
+            {w.isOwn ? (
+              <div
+                className="flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-bold border bg-neon-pink/20 text-neon-pink border-neon-pink/50 flex-shrink-0 whitespace-nowrap"
+                title="Das ist dein Wunsch"
+              >
+                <span className="text-sm leading-none">🎯</span>
+                <span>Dein Wunsch</span>
+                <span className="font-mono text-[10px] text-neon-pink/70 ml-0.5">
+                  ❤️ {w.voteCount}
+                </span>
+              </div>
+            ) : (
+              <button
+                onClick={() => toggleVote(w.id)}
+                disabled={busyWishId === w.id || !sessionId}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-bold border transition flex-shrink-0 ${
+                  w.userVoted
+                    ? "bg-neon-pink/20 text-neon-pink border-neon-pink/50"
+                    : "bg-white/5 text-white/70 border-white/10 hover:bg-white/10 hover:border-white/30"
+                } ${busyWishId === w.id ? "opacity-50 cursor-wait" : ""}`}
+                title={w.userVoted ? "Vote zurücknehmen" : "Diesen Wunsch pushen"}
+              >
+                <span className="text-base leading-none">{w.userVoted ? "❤️" : "🤍"}</span>
+                <span className="font-mono text-xs">{w.voteCount}</span>
+              </button>
+            )}
           </li>
         ))}
       </ul>
