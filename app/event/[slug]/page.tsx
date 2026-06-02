@@ -5,6 +5,7 @@ import TipSection from "./TipSection";
 import RatingSection from "./RatingSection";
 import LiveQueueDisplay from "./LiveQueueDisplay";
 import WishesVotingList from "./WishesVotingList";
+import LastEventTracker from "./LastEventTracker";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -45,6 +46,7 @@ export default async function EventPage({ params }: Props) {
 
   return (
     <main className="min-h-screen flex flex-col items-center px-4 py-10">
+      <LastEventTracker slug={slug} name={event.name} />
       <header className="text-center mb-8">
         <p className="text-sm uppercase tracking-widest text-neon-cyan mb-2">
           {new Date(event.event_date).toLocaleDateString("de-DE", {
