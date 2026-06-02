@@ -15,7 +15,7 @@ interface Props {
   hasPaypal: boolean;
 }
 
-const PRESET_AMOUNTS = [2, 6];
+const PRESET_AMOUNTS = [2, 4, 6];
 
 type Method = "bank" | "paypal";
 
@@ -111,7 +111,7 @@ export default function TipSection({
         )}
 
         {/* Betrag-Auswahl */}
-        <div className="grid grid-cols-3 gap-2 mb-5">
+        <div className="grid grid-cols-4 gap-2 mb-5">
           {PRESET_AMOUNTS.map((a) => (
             <button
               key={a}
