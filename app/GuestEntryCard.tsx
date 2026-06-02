@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getLastEvent, type LastEvent } from "@/lib/last-event";
+import QrScanButton from "./QrScanButton";
 
 // Gast-Einstieg auf der Landing-Page:
 // - Wenn letztes Event bekannt: Shortcut zurueck
-// - Sonst Hinweis QR-Code mit Kamera-App scannen
+// - Plus QR-Scan-Button (oeffnet Live-Kamera-Scanner in der App).
 // Zeigt nichts beim SSR (vermeidet Hydration-Mismatch), erst nach Mount.
 export default function GuestEntryCard() {
   const [last, setLast] = useState<LastEvent | null>(null);
@@ -38,18 +39,13 @@ export default function GuestEntryCard() {
         </Link>
       )}
 
-      <div className="rounded-3xl border border-white/10 bg-white/5 p-5 text-left">
-        <p className="text-[10px] uppercase tracking-widest text-white/40 mb-2 font-semibold">
-          📷 {last ? "Anderes Event?" : "Du bist Gast auf einer Party?"}
-        </p>
-        <p className="text-white/80 text-sm leading-relaxed">
-          Öffne die <strong className="text-white">Kamera-App</strong> auf deinem
-          Handy und richte sie auf den QR-Code am Tisch oder beim DJ.
-        </p>
-        <p className="text-white/40 text-xs mt-2">
-          Der QR öffnet dein Event automatisch — kein Suchen, kein Eintippen.
-        </p>
-      </div>
+      {/* Echter QR-Scanner in der App — kein Wechsel mehr in den Browser */}
+      <QrScanButton />
+
+      <p className="text-white/30 text-[11px] text-center px-2 leading-relaxed">
+        Funktioniert der Scanner nicht? Du kannst auch jederzeit die Kamera-App
+        deines Handys benutzen.
+      </p>
     </div>
   );
 }

@@ -12,6 +12,7 @@
     "@anthropic-ai/sdk": "^0.65.0",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.47.10",
+    "html5-qrcode": "^2.3.8",
     "next": "^15.1.6",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
