@@ -99,23 +99,32 @@ export default function PushOnboardingBanner({ eventId }: Props) {
     }
   }
 
-  function fireTestPush() {
+  const [testResult, setTestResult] = useState<string | null>(null);
+
+  async function fireTestPush() {
     if (typeof window === "undefined") return;
     if (Notification.permission !== "granted") return;
     setTestFiring(true);
+    setTestResult(null);
     try {
-      const n = new Notification("🎵 Test-Push", {
-        body: "Wenn du das siehst, klappt's beim echten Song auch!",
-        icon: "/icon-192.png",
-        badge: "/icon-192.png",
-        tag: "test-push"
+      const sessionId = getGuestSessionId();
+      const res = await fetch("/api/push/test-self", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId, event_id: eventId })
       });
-      n.onclick = () => { n.close(); window.focus(); };
-    } catch {}
-    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-      try { navigator.vibrate([180, 80, 180]); } catch {}
+      const data = await res.json();
+      if (data.ok) {
+        setTestResult("📨 Sende Push — bitte 5 Sek warten + Bildschirm sperren!");
+      } else {
+        setTestResult(`⚠ ${data.message ?? "Push konnte nicht zugestellt werden."}`);
+      }
+    } catch {
+      setTestResult("⚠ Netzwerk-Fehler beim Senden.");
+    } finally {
+      setTimeout(() => setTestFiring(false), 1000);
+      setTimeout(() => setTestResult(null), 8000);
     }
-    setTimeout(() => setTestFiring(false), 1500);
   }
 
   // Wenn aktiv und kollabiert: nur ein winziges grünes Pille zeigen
@@ -154,6 +163,7 @@ export default function PushOnboardingBanner({ eventId }: Props) {
         <GrantedState
           onTest={fireTestPush}
           testFiring={testFiring}
+          testResult={testResult}
           onCollapse={() => setCollapsed(true)}
         />
       )}
@@ -241,10 +251,12 @@ function IosInstall() {
 function GrantedState({
   onTest,
   testFiring,
+  testResult,
   onCollapse
 }: {
   onTest: () => void;
   testFiring: boolean;
+  testResult: string | null;
   onCollapse: () => void;
 }) {
   return (
@@ -258,9 +270,9 @@ function GrantedState({
         <button
           onClick={onTest}
           disabled={testFiring}
-          className="py-2.5 rounded-2xl bg-white/10 hover:bg-white/15 text-white font-medium text-xs border border-white/20 transition disabled:opacity-50"
+          className="py-2.5 rounded-2xl bg-gradient-to-r from-neon-pink to-neon-purple text-white font-bold text-xs transition disabled:opacity-50 active:scale-95"
         >
-          {testFiring ? "📨 …" : "📨 Test-Push"}
+          {testFiring ? "📨 sende…" : "📨 Echten Test-Push senden"}
         </button>
         <button
           onClick={onCollapse}
@@ -269,6 +281,14 @@ function GrantedState({
           Einklappen
         </button>
       </div>
+      {testResult && (
+        <p className="text-white/80 text-[11px] mt-3 px-2 leading-relaxed">
+          {testResult}
+        </p>
+      )}
+      <p className="text-white/30 text-[10px] mt-3">
+        💡 Test-Push geht den vollen Server-Weg — wenn der ankommt, klappt's beim echten Song auch.
+      </p>
     </div>
   );
 }
