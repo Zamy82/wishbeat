@@ -16,9 +16,15 @@ interface Html5QrcodeConfig {
   disableFlip?: boolean;
 }
 
+interface VideoConstraints {
+  facingMode: string;
+  width?: { ideal: number };
+  height?: { ideal: number };
+}
+
 interface Html5QrcodeLike {
   start: (
-    cameraIdOrConfig: { facingMode: string },
+    cameraIdOrConfig: VideoConstraints,
     config: Html5QrcodeConfig,
     onSuccess: (decodedText: string) => void,
     onError?: (errorMessage: string) => void
@@ -52,22 +58,29 @@ export default function QrScanButton() {
         if (!mounted) return;
         const scanner = new mod.Html5Qrcode(READER_ID) as unknown as Html5QrcodeLike;
         scannerRef.current = scanner;
+        // iOS Safari ist zickig: hoehere Video-Aufloesung explizit anfordern,
+        // sonst liefert es 640x480 was bei kleinen QR-Codes nicht reicht.
+        // facingMode: "environment" (NICHT { exact: ... }), damit es auf
+        // Geraeten ohne Backcam einen Fallback gibt.
+        const videoConstraints = {
+          facingMode: "environment",
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        };
         await scanner.start(
-          { facingMode: "environment" },
+          videoConstraints,
           {
-            fps: 20,
-            // qrbox dynamisch: 70% des kleineren Container-Mass — passt sich
-            // an Hochkant- und Querformat an, wesentlich zuverlaessiger
-            // als ein fixer 240er-Quader.
+            fps: 25,
+            // qrbox dynamisch: 75% des kleineren Container-Mass
             qrbox: (vw: number, vh: number) => {
               const min = Math.min(vw, vh);
-              const size = Math.max(160, Math.floor(min * 0.7));
+              const size = Math.max(180, Math.floor(min * 0.75));
               return { width: size, height: size };
             },
             aspectRatio: 1,
             // Nutzt die native BarcodeDetector-API wo verfuegbar (Chrome,
-            // Edge, Android-WebView). Viel schneller und robuster als das
-            // pure JS-Fallback.
+            // Edge, Android-WebView). iOS Safari hat das nicht — faellt auf
+            // JS-Decoder zurueck.
             experimentalFeatures: { useBarCodeDetectorIfSupported: true },
             rememberLastUsedCamera: true,
             disableFlip: false
@@ -195,8 +208,11 @@ export default function QrScanButton() {
 
             {status === "running" && (
               <div className="text-white/60 text-xs text-center space-y-1">
-                <p>Halte den QR-Code im hellen Rahmen, ca. 10–20 cm Abstand.</p>
-                <p className="text-white/40">Bei dunklem QR: Bildschirmhelligkeit hochdrehen.</p>
+                <p>Halte den QR im hellen Rahmen, 10–20 cm Abstand.</p>
+                <p className="text-white/40">
+                  PC-Bildschirm? Browser mit <kbd className="px-1 rounded bg-white/10">Strg</kbd>+<kbd className="px-1 rounded bg-white/10">+</kbd> zoomen,
+                  bis QR mind. 5 cm groß ist.
+                </p>
               </div>
             )}
 
