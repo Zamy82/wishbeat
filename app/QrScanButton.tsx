@@ -5,10 +5,21 @@ import { useRouter } from "next/navigation";
 
 // Minimaler Typ-Ausschnitt fuer html5-qrcode — wir importieren die Library
 // nur dynamisch (kein SSR-Bundle-Bloat), darum hier Hand-Typen.
+interface Html5QrcodeConfig {
+  fps: number;
+  qrbox?:
+    | { width: number; height: number }
+    | ((vw: number, vh: number) => { width: number; height: number });
+  aspectRatio?: number;
+  experimentalFeatures?: { useBarCodeDetectorIfSupported?: boolean };
+  rememberLastUsedCamera?: boolean;
+  disableFlip?: boolean;
+}
+
 interface Html5QrcodeLike {
   start: (
     cameraIdOrConfig: { facingMode: string },
-    config: { fps: number; qrbox: { width: number; height: number } },
+    config: Html5QrcodeConfig,
     onSuccess: (decodedText: string) => void,
     onError?: (errorMessage: string) => void
   ) => Promise<void>;
@@ -43,7 +54,24 @@ export default function QrScanButton() {
         scannerRef.current = scanner;
         await scanner.start(
           { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 240, height: 240 } },
+          {
+            fps: 20,
+            // qrbox dynamisch: 70% des kleineren Container-Mass — passt sich
+            // an Hochkant- und Querformat an, wesentlich zuverlaessiger
+            // als ein fixer 240er-Quader.
+            qrbox: (vw: number, vh: number) => {
+              const min = Math.min(vw, vh);
+              const size = Math.max(160, Math.floor(min * 0.7));
+              return { width: size, height: size };
+            },
+            aspectRatio: 1,
+            // Nutzt die native BarcodeDetector-API wo verfuegbar (Chrome,
+            // Edge, Android-WebView). Viel schneller und robuster als das
+            // pure JS-Fallback.
+            experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+            rememberLastUsedCamera: true,
+            disableFlip: false
+          },
           (decodedText: string) => {
             handleScan(decodedText);
           },
@@ -166,9 +194,10 @@ export default function QrScanButton() {
             </div>
 
             {status === "running" && (
-              <p className="text-white/60 text-xs text-center">
-                Richte die Kamera auf den QR-Code. Wird automatisch erkannt.
-              </p>
+              <div className="text-white/60 text-xs text-center space-y-1">
+                <p>Halte den QR-Code im hellen Rahmen, ca. 10–20 cm Abstand.</p>
+                <p className="text-white/40">Bei dunklem QR: Bildschirmhelligkeit hochdrehen.</p>
+              </div>
             )}
 
             {error && (
