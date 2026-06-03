@@ -250,15 +250,52 @@ export default function SongRequestForm({ eventId }: Props) {
 
   return (
     <div className="w-full max-w-md flex flex-col gap-4">
-      {/* Suchfeld */}
+      {/* Prominenter Header — macht klar: HIER passiert was */}
+      {!selected && (
+        <div className="text-center mb-1">
+          <h2 className="text-2xl font-bold bg-gradient-to-r from-neon-pink via-neon-purple to-neon-cyan bg-clip-text text-transparent">
+            🎵 Wünsch dir deinen Song
+          </h2>
+          <p className="text-white/50 text-sm mt-1">
+            Suche unten — Spotify-Katalog, einfach tippen
+          </p>
+        </div>
+      )}
+
+      {/* Suchfeld — prominent mit Glow, Lupe-Icon, kraeftigerem Border */}
       <div className="relative">
-        <input
-          type="text"
-          placeholder="Song oder Künstler suchen…"
-          value={query}
-          onChange={(e) => handleQueryChange(e.target.value)}
-          className="w-full rounded-2xl bg-white/10 border border-white/20 px-5 py-4 text-white placeholder:text-white/40 focus:outline-none focus:border-neon-purple transition text-base"
+        {/* Glow-Hintergrund hinter dem Input */}
+        <div
+          className="absolute inset-0 rounded-2xl bg-gradient-to-r from-neon-pink/20 via-neon-purple/20 to-neon-cyan/20 blur-md opacity-70 pointer-events-none"
+          aria-hidden
         />
+
+        <div className="relative">
+          {/* Lupe-Icon links */}
+          <svg
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-neon-pink pointer-events-none"
+            width={22}
+            height={22}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <line x1="20" y1="20" x2="16.5" y2="16.5" />
+          </svg>
+
+          <input
+            type="text"
+            placeholder="Song oder Künstler eingeben…"
+            value={query}
+            onChange={(e) => handleQueryChange(e.target.value)}
+            className="w-full rounded-2xl bg-white/15 border-2 border-neon-purple/50 pl-12 pr-5 py-4 text-white placeholder:text-white/55 focus:outline-none focus:border-neon-pink focus:bg-white/20 transition text-base font-medium shadow-lg shadow-neon-purple/10"
+          />
+        </div>
+
         {query.length >= 2 && tracks.length === 0 && (
           <p className="mt-2 text-sm text-white/40 text-center">Keine Treffer</p>
         )}
