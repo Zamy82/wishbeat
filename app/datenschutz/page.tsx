@@ -39,10 +39,10 @@ export default function DatenschutzPage() {
           <br />
           E-Mail:{" "}
           <a
-            href="mailto:[KONTAKT-EMAIL]"
+            href="mailto:wishbeatdj@gmail.com"
             className="text-neon-cyan hover:text-neon-pink underline underline-offset-2"
           >
-            [KONTAKT-EMAIL]
+            wishbeatdj@gmail.com
           </a>
         </p>
       </section>
