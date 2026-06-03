@@ -61,7 +61,7 @@ export default function RatingSection({ eventId, eventName }: Props) {
 
   if (submitted) {
     return (
-      <section className="w-full max-w-md mt-6 mb-4">
+      <section id="rating" className="w-full max-w-md mt-6 mb-4 scroll-mt-6">
         <div className="rounded-3xl border border-neon-cyan/30 bg-neon-cyan/10 p-6 text-center">
           <div className="text-4xl mb-2">🎉</div>
           <p className="text-white font-semibold">Danke für deine Bewertung!</p>
@@ -74,7 +74,7 @@ export default function RatingSection({ eventId, eventName }: Props) {
   }
 
   return (
-    <section className="w-full max-w-md mt-6 mb-4">
+    <section id="rating" className="w-full max-w-md mt-6 mb-4 scroll-mt-6">
       <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
         <div className="text-center mb-5">
           <h3 className="text-xl font-bold text-white">⭐ Wie war der Abend?</h3>

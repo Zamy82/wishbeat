@@ -87,12 +87,20 @@ export default async function DjEventPage({ params }: Props) {
             <p className="text-white/30 text-xs text-center max-w-[140px] break-all">
               {eventUrl}
             </p>
-            <Link
-              href={`/dj/event/${id}/flyer`}
-              className="mt-2 px-4 py-2 rounded-full bg-gradient-to-r from-neon-pink to-neon-purple text-white text-xs font-semibold hover:opacity-90 transition"
-            >
-              🖨️ Flyer drucken
-            </Link>
+            <div className="flex flex-col gap-2 mt-2 w-full max-w-[160px]">
+              <Link
+                href={`/dj/event/${id}/flyer`}
+                className="px-4 py-2 rounded-full bg-gradient-to-r from-neon-pink to-neon-purple text-white text-xs font-semibold hover:opacity-90 transition text-center"
+              >
+                🖨️ Flyer (A5)
+              </Link>
+              <Link
+                href={`/dj/event/${id}/tischaufsteller`}
+                className="px-4 py-2 rounded-full border border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan text-xs font-semibold hover:bg-neon-cyan/20 transition text-center"
+              >
+                🎯 Tisch-Aufsteller (4×)
+              </Link>
+            </div>
           </div>
         </div>
 
