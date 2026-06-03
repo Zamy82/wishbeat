@@ -10,6 +10,7 @@ import StatsPanel from "./StatsPanel";
 import DjPushOptIn from "./DjPushOptIn";
 import ResetWishlistButton from "./ResetWishlistButton";
 import DedupePlaysButton from "./DedupePlaysButton";
+import CrowdPulse from "./CrowdPulse";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -122,6 +123,9 @@ export default async function DjEventPage({ params }: Props) {
       </header>
 
       <DjPushOptIn />
+
+      {/* Live-Reaktionen der Gaeste auf den aktuellen Song */}
+      <CrowdPulse eventId={id} />
 
       <section>
         <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
