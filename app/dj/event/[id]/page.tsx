@@ -87,10 +87,16 @@ export default async function DjEventPage({ params }: Props) {
             <p className="text-white/30 text-xs text-center max-w-[140px] break-all">
               {eventUrl}
             </p>
-            <div className="flex flex-col gap-2 mt-2 w-full max-w-[160px]">
+            <div className="flex flex-col gap-2 mt-2 w-full max-w-[180px]">
+              <Link
+                href={`/dj/event/${id}/poster`}
+                className="px-4 py-2 rounded-full bg-gradient-to-r from-neon-pink via-neon-purple to-neon-cyan text-white text-xs font-bold hover:opacity-90 transition text-center"
+              >
+                🎨 Party-Poster (A4)
+              </Link>
               <Link
                 href={`/dj/event/${id}/flyer`}
-                className="px-4 py-2 rounded-full bg-gradient-to-r from-neon-pink to-neon-purple text-white text-xs font-semibold hover:opacity-90 transition text-center"
+                className="px-4 py-2 rounded-full bg-white/10 border border-white/20 text-white/80 text-xs font-semibold hover:bg-white/15 transition text-center"
               >
                 🖨️ Flyer (A5)
               </Link>
