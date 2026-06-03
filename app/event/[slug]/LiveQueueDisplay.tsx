@@ -230,7 +230,7 @@ export default function LiveQueueDisplay({ eventId }: Props) {
             </div>
           </div>
 
-          {/* Als nächstes (max 5) */}
+          {/* Als nächstes (max 8) */}
           {data.next.length > 0 && (
             <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-widest text-white/40 font-semibold mb-3">

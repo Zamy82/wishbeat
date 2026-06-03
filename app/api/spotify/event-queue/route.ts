@@ -3,7 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 import { getAdminSpotifyToken } from "@/lib/spotify-admin";
 
 // Anonymer Endpunkt für die Gäste-Seite — gibt currently playing + Queue zurück.
-// Limitiert auf max 5 Tracks aus der Queue (mehr braucht ein Gast nicht zu sehen).
+// Limitiert auf max 8 Tracks aus der Queue — guter Mittelweg zwischen
+// Übersicht (Gast scrollt nicht ewig) und Antizipation (Gast sieht, ob sein
+// Wunsch bald kommt).
 
 interface SpotifyTrack {
   id: string;
@@ -79,6 +81,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     playing: true,
     current: toTrack(data.currently_playing),
-    next: data.queue.slice(0, 5).map(toTrack)
+    next: data.queue.slice(0, 8).map(toTrack)
   });
 }
