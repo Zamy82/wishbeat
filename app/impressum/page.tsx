@@ -24,9 +24,9 @@ export default function ImpressumPage() {
       <p className="text-white/50 text-sm mb-8">Angaben gemäß § 5 TMG</p>
 
       <section className="space-y-1 mb-8 text-base leading-relaxed">
-        <p className="font-semibold text-white">[VOLLSTÄNDIGER NAME]</p>
-        <p>[STRAßE UND HAUSNUMMER]</p>
-        <p>[PLZ ORT]</p>
+        <p className="font-semibold text-white">Zamy Ahmad</p>
+        <p>Lieselotte-Berger-Platz 8</p>
+        <p>12355 Berlin</p>
         <p>Deutschland</p>
       </section>
 
@@ -48,11 +48,11 @@ export default function ImpressumPage() {
           Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV
         </h2>
         <p className="text-base leading-relaxed">
-          [VOLLSTÄNDIGER NAME]
+          Zamy Ahmad
           <br />
-          [STRAßE UND HAUSNUMMER]
+          Lieselotte-Berger-Platz 8
           <br />
-          [PLZ ORT]
+          12355 Berlin
         </p>
       </section>
 

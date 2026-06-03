@@ -31,11 +31,11 @@ export default function DatenschutzPage() {
           1. Verantwortlicher
         </h2>
         <p className="text-base leading-relaxed">
-          [VOLLSTÄNDIGER NAME]
+          Zamy Ahmad
           <br />
-          [STRAßE UND HAUSNUMMER]
+          Lieselotte-Berger-Platz 8
           <br />
-          [PLZ ORT]
+          12355 Berlin
           <br />
           E-Mail:{" "}
           <a
