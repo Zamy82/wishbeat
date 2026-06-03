@@ -26,20 +26,40 @@ interface ArtistStat {
   plays: number;
 }
 
+interface PulseStat {
+  trackId: string;
+  title: string;
+  artist: string;
+  cover_url: string | null;
+  fire: number;
+  dance: number;
+  meh: number;
+  total: number;
+  score: number;
+}
+
+type Reaction = "fire" | "dance" | "meh";
+interface ReactionRow {
+  spotify_track_id: string;
+  reaction: Reaction;
+}
+
 export default function StatsPanel({
   eventId,
   initialRequests,
   initialPlays
 }: Props) {
+  const [tab, setTab] = useState<"songs" | "pulse">("songs");
   const [requests, setRequests] = useState<SongRequest[]>(initialRequests);
   const [plays, setPlays] = useState<EventPlay[]>(initialPlays);
+  const [reactions, setReactions] = useState<ReactionRow[]>([]);
 
-  // Realtime + Polling-Fallback für plays UND requests
+  // Realtime + Polling-Fallback für plays UND requests UND reactions
   useEffect(() => {
     const supabase = createClient();
 
     async function refetchAll() {
-      const [{ data: r }, { data: p }] = await Promise.all([
+      const [{ data: r }, { data: p }, { data: rx }] = await Promise.all([
         supabase
           .from("song_requests")
           .select("*")
@@ -49,11 +69,18 @@ export default function StatsPanel({
           .from("event_plays")
           .select("*")
           .eq("event_id", eventId)
-          .order("played_at", { ascending: true })
+          .order("played_at", { ascending: true }),
+        supabase
+          .from("song_reactions")
+          .select("spotify_track_id, reaction")
+          .eq("event_id", eventId)
       ]);
       if (r) setRequests(r as SongRequest[]);
       if (p) setPlays(p as EventPlay[]);
+      if (rx) setReactions(rx as ReactionRow[]);
     }
+
+    refetchAll();
 
     const pollId = setInterval(() => {
       if (document.visibilityState === "visible") refetchAll();
@@ -82,6 +109,16 @@ export default function StatsPanel({
         },
         () => refetchAll()
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "song_reactions",
+          filter: `event_id=eq.${eventId}`
+        },
+        () => refetchAll()
+      )
       .subscribe();
 
     return () => {
@@ -91,8 +128,12 @@ export default function StatsPanel({
   }, [eventId]);
 
   const stats = useMemo(() => calculateStats(plays, requests), [plays, requests]);
+  const pulseStats = useMemo(
+    () => calculatePulseStats(reactions, plays, requests),
+    [reactions, plays, requests]
+  );
 
-  if (plays.length === 0 && requests.length === 0) {
+  if (plays.length === 0 && requests.length === 0 && reactions.length === 0) {
     return (
       <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
         <p className="text-white/40 text-sm">
@@ -105,6 +146,47 @@ export default function StatsPanel({
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Tab-Switcher */}
+      <div className="flex gap-1 p-1 rounded-2xl bg-white/5 border border-white/10 w-fit">
+        <button
+          type="button"
+          onClick={() => setTab("songs")}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+            tab === "songs"
+              ? "bg-gradient-to-r from-neon-purple/40 to-neon-pink/40 text-white shadow"
+              : "text-white/50 hover:text-white/80"
+          }`}
+        >
+          📊 Songs
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("pulse")}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition ${
+            tab === "pulse"
+              ? "bg-gradient-to-r from-neon-pink/40 to-orange-500/40 text-white shadow"
+              : "text-white/50 hover:text-white/80"
+          }`}
+        >
+          🎚 Crowd-Pulse
+        </button>
+      </div>
+
+      {tab === "songs" ? (
+        <SongsTab stats={stats} />
+      ) : (
+        <PulseTab pulseStats={pulseStats} />
+      )}
+    </div>
+  );
+}
+
+/* ───────────────────────────────────────────────────────────
+   Tab: Songs (bisheriger Inhalt)
+   ─────────────────────────────────────────────────────────── */
+function SongsTab({ stats }: { stats: Stats }) {
+  return (
+    <>
       {/* KPI-Kacheln */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
@@ -295,6 +377,215 @@ export default function StatsPanel({
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+/* ───────────────────────────────────────────────────────────
+   Tab: Crowd-Pulse — Aggregat aller Reactions pro Song
+   ─────────────────────────────────────────────────────────── */
+function PulseTab({ pulseStats }: { pulseStats: PulseStat[] }) {
+  if (pulseStats.length === 0) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center">
+        <div className="text-3xl mb-2">🎚</div>
+        <p className="text-white/60 text-sm">
+          Noch keine Reaktionen.
+        </p>
+        <p className="text-white/40 text-xs mt-2">
+          Sobald Gäste auf 🔥 / 💃 / 😴 tippen, siehst du hier ihre Stimmung
+          pro Song — sortiert nach Crowd-Pulse-Score.
+        </p>
+      </div>
+    );
+  }
+
+  const totals = pulseStats.reduce(
+    (acc, s) => ({
+      fire: acc.fire + s.fire,
+      dance: acc.dance + s.dance,
+      meh: acc.meh + s.meh,
+      reactions: acc.reactions + s.total
+    }),
+    { fire: 0, dance: 0, meh: 0, reactions: 0 }
+  );
+
+  const hottest = pulseStats[0];
+  const tanzflaeche = [...pulseStats].sort((a, b) => b.dance - a.dance)[0];
+
+  return (
+    <>
+      {/* KPI-Kacheln */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard
+          label="Reaktionen total"
+          value={totals.reactions}
+          accent="text-neon-pink"
+          subline={`über ${pulseStats.length} ${pulseStats.length === 1 ? "Song" : "Songs"}`}
+        />
+        <KpiCard
+          label="🔥 Feuer"
+          value={totals.fire}
+          accent="text-orange-300"
+        />
+        <KpiCard
+          label="💃 Tanze"
+          value={totals.dance}
+          accent="text-neon-pink"
+        />
+        <KpiCard
+          label="😴 Wechsel"
+          value={totals.meh}
+          accent="text-white/60"
+        />
+      </div>
+
+      {/* Heißester Song + Tanzflächen-Killer */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <PulseHero
+          icon="🔥"
+          title="Heißester Song"
+          subtitle={`Score ${hottest.score}%`}
+          variant="fire"
+          track={hottest}
+        />
+        {tanzflaeche && tanzflaeche.dance > 0 && (
+          <PulseHero
+            icon="💃"
+            title="Tanzflächen-Killer"
+            subtitle={`${tanzflaeche.dance}× getanzt`}
+            variant="dance"
+            track={tanzflaeche}
+          />
+        )}
+      </div>
+
+      {/* Vollständige Liste */}
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
+        <h3 className="text-xs uppercase tracking-widest text-white/40 font-semibold mb-3">
+          Alle Songs nach Crowd-Pulse
+        </h3>
+        <ol className="flex flex-col gap-3">
+          {pulseStats.map((p, i) => (
+            <li
+              key={p.trackId}
+              className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.03] p-2.5"
+            >
+              <span className="text-white/30 text-xs font-bold w-5 text-center">
+                {i + 1}
+              </span>
+              {p.cover_url && (
+                <Image
+                  src={p.cover_url}
+                  alt={p.title}
+                  width={40}
+                  height={40}
+                  className="rounded-lg flex-shrink-0"
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-white text-sm font-semibold truncate">
+                  {p.title}
+                </p>
+                <p className="text-white/40 text-xs truncate">{p.artist}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <ReactionPill emoji="🔥" count={p.fire} color="text-orange-300" />
+                  <ReactionPill emoji="💃" count={p.dance} color="text-neon-pink" />
+                  <ReactionPill emoji="😴" count={p.meh} color="text-white/50" />
+                </div>
+              </div>
+              <div className="flex flex-col items-end gap-0.5 flex-shrink-0 min-w-[56px]">
+                <span
+                  className={`text-lg font-black ${scoreColor(p.score)}`}
+                >
+                  {p.score}%
+                </span>
+                <span className="text-[10px] text-white/40 uppercase tracking-wider">
+                  Score
+                </span>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      <p className="text-white/30 text-[11px] text-center -mt-2">
+        Score = (🔥 + 1,5×💃) ÷ (🔥 + 💃 + 0,5×😴) × 100
+      </p>
+    </>
+  );
+}
+
+function scoreColor(score: number): string {
+  if (score >= 90) return "text-orange-300";
+  if (score >= 75) return "text-neon-pink";
+  if (score >= 50) return "text-yellow-300";
+  if (score >= 30) return "text-white/70";
+  return "text-cyan-300";
+}
+
+function ReactionPill({
+  emoji,
+  count,
+  color
+}: {
+  emoji: string;
+  count: number;
+  color: string;
+}) {
+  if (count === 0) return null;
+  return (
+    <span className={`text-[11px] font-mono ${color}`}>
+      {emoji} {count}
+    </span>
+  );
+}
+
+function PulseHero({
+  icon,
+  title,
+  subtitle,
+  variant,
+  track
+}: {
+  icon: string;
+  title: string;
+  subtitle: string;
+  variant: "fire" | "dance";
+  track: PulseStat;
+}) {
+  // Statische Klassen-Kombis, damit Tailwind sie beim Build erkennt
+  const wrapClass =
+    variant === "fire"
+      ? "rounded-3xl border border-orange-400/30 bg-gradient-to-br from-orange-500/15 to-neon-pink/5 p-5"
+      : "rounded-3xl border border-neon-pink/30 bg-gradient-to-br from-neon-pink/15 to-neon-purple/5 p-5";
+  const accentClass =
+    variant === "fire" ? "text-orange-300" : "text-neon-pink";
+
+  return (
+    <div className={wrapClass}>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-xl">{icon}</span>
+        <span className={`text-xs uppercase tracking-widest font-bold ${accentClass}`}>
+          {title}
+        </span>
+      </div>
+      <div className="flex items-center gap-4">
+        {track.cover_url && (
+          <Image
+            src={track.cover_url}
+            alt={track.title}
+            width={64}
+            height={64}
+            className="rounded-2xl shadow-xl flex-shrink-0"
+          />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-white font-bold truncate">{track.title}</p>
+          <p className="text-white/60 text-sm truncate">{track.artist}</p>
+          <p className={`text-sm mt-1 font-semibold ${accentClass}`}>{subtitle}</p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -406,7 +697,6 @@ function calculateStats(plays: EventPlay[], requests: SongRequest[]): Stats {
       if (p.played_at > existing.latestPlayedAt) {
         existing.latestPlayedAt = p.played_at;
       }
-      // Wenn ersteSeen kein Cover hatte, spaeteres uebernehmen
       if (!existing.cover_url && p.cover_url) {
         existing.cover_url = p.cover_url;
       }
@@ -428,8 +718,6 @@ function calculateStats(plays: EventPlay[], requests: SongRequest[]): Stats {
     return b.latestPlayedAt.localeCompare(a.latestPlayedAt);
   });
 
-  // Top Artists — Basis sind die deduplizierten Plays, primaerer Kuenstler.
-  // Behalte original-Display-Schreibweise vom ersten Auftreten.
   const artistMap = new Map<string, { name: string; plays: number }>();
   for (const p of dedupedPlays) {
     const primary = p.artist.split(/[,&]|\bfeat\.?\b|\bft\.?\b|\bfeaturing\b/i)[0]?.trim();
@@ -446,7 +734,6 @@ function calculateStats(plays: EventPlay[], requests: SongRequest[]): Stats {
     .sort((a, b) => b.plays - a.plays)
     .slice(0, 5);
 
-  // Wunsch-Stats
   const totalRequests = requests.length;
   const played = requests.filter((r) => r.status === "played").length;
   const approved = requests.filter((r) => r.status === "approved").length;
@@ -456,7 +743,6 @@ function calculateStats(plays: EventPlay[], requests: SongRequest[]): Stats {
     totalRequests > 0
       ? Math.round(((approved + played) / totalRequests) * 100)
       : 0;
-  // Wunsch-Anteil basiert auf deduplizierten Plays — sonst inkonsistent
   const wishesPlayed = dedupedPlays.filter((p) => p.source === "wish").length;
   const wishShare =
     dedupedPlays.length > 0 ? Math.round((wishesPlayed / dedupedPlays.length) * 100) : 0;
@@ -476,4 +762,78 @@ function calculateStats(plays: EventPlay[], requests: SongRequest[]): Stats {
     topTracks: allTracks.slice(0, 5),
     topArtists
   };
+}
+
+// Aggregiere Reactions pro spotify_track_id, hole Metadaten aus Plays/Requests,
+// berechne Score und sortiere.
+function calculatePulseStats(
+  reactions: ReactionRow[],
+  plays: EventPlay[],
+  requests: SongRequest[]
+): PulseStat[] {
+  if (reactions.length === 0) return [];
+
+  // 1) Reactions zaehlen pro Track-ID
+  const counts = new Map<string, { fire: number; dance: number; meh: number }>();
+  for (const r of reactions) {
+    const c = counts.get(r.spotify_track_id) ?? { fire: 0, dance: 0, meh: 0 };
+    if (r.reaction === "fire") c.fire++;
+    else if (r.reaction === "dance") c.dance++;
+    else if (r.reaction === "meh") c.meh++;
+    counts.set(r.spotify_track_id, c);
+  }
+
+  // 2) Metadaten-Lookup aus Plays (primaer) + Requests (Fallback)
+  const meta = new Map<
+    string,
+    { title: string; artist: string; cover_url: string | null }
+  >();
+  for (const p of plays) {
+    if (!meta.has(p.spotify_track_id)) {
+      meta.set(p.spotify_track_id, {
+        title: p.title,
+        artist: p.artist,
+        cover_url: p.cover_url
+      });
+    }
+  }
+  for (const r of requests) {
+    if (!meta.has(r.spotify_track_id)) {
+      meta.set(r.spotify_track_id, {
+        title: r.title,
+        artist: r.artist,
+        cover_url: r.cover_url
+      });
+    }
+  }
+
+  // 3) PulseStats zusammenstellen + Score berechnen
+  const result: PulseStat[] = [];
+  for (const [trackId, c] of counts.entries()) {
+    const m = meta.get(trackId);
+    const total = c.fire + c.dance + c.meh;
+    if (total === 0) continue;
+    const num = c.fire + 1.5 * c.dance;
+    const den = c.fire + c.dance + 0.5 * c.meh;
+    const score = den > 0 ? Math.min(100, Math.round((num / den) * 100)) : 0;
+    result.push({
+      trackId,
+      title: m?.title ?? "Unbekannter Track",
+      artist: m?.artist ?? "—",
+      cover_url: m?.cover_url ?? null,
+      fire: c.fire,
+      dance: c.dance,
+      meh: c.meh,
+      total,
+      score
+    });
+  }
+
+  // 4) Sortieren: erst nach Score, dann nach total
+  result.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return b.total - a.total;
+  });
+
+  return result;
 }
