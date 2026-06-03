@@ -15,6 +15,38 @@ interface Props {
   logoStyle: string | null;
 }
 
+// Titel intelligent splitten:
+// "Angie's 40. Geburtstag" -> { lead: "Angie's", bigNumber: "40", trail: "Geburtstag" }
+// "Tom wird 50" -> { lead: "Tom", bigNumber: "50", trail: "Jahre!" }
+// "Sommerfest 2026" -> { lead: "Sommerfest 2026", bigNumber: null, trail: "" }
+function splitTitle(name: string): {
+  lead: string;
+  bigNumber: string | null;
+  trail: string;
+} {
+  // Pattern A: "X's NUMBER. Y" oder "X NUMBER. Y"
+  const a = name.match(/^(.+?)\s+(\d{1,3})\s*\.?\s*(.*)$/);
+  if (a && a[1] && a[2]) {
+    const lead = a[1].trim();
+    const num = a[2];
+    let trail = (a[3] || "").trim();
+    // Hubsche dt. Synonyme: "Geburtstag" -> "Birthday Bash!"
+    if (/^geburtstag/i.test(trail)) trail = "Birthday Bash!";
+    if (!trail) trail = "Birthday Bash!";
+    return { lead, bigNumber: num, trail };
+  }
+  // Pattern B: "X wird NUMBER"
+  const b = name.match(/^(.+?)\s+wird\s+(\d{1,3})\s*(.*)$/i);
+  if (b) {
+    return {
+      lead: b[1].trim(),
+      bigNumber: b[2],
+      trail: (b[3] || "Birthday Bash!").trim()
+    };
+  }
+  return { lead: name, bigNumber: null, trail: "" };
+}
+
 export default function PosterCard({
   name,
   tagline,
@@ -52,6 +84,8 @@ export default function PosterCard({
     year: "numeric"
   });
 
+  const title = splitTitle(name);
+
   return (
     <>
       {/* Toolbar — beim Druck ausgeblendet */}
@@ -78,39 +112,49 @@ export default function PosterCard({
 
       <div className="poster-stage flex justify-center pb-16 px-4">
         <article className="poster-card">
-          {/* Top-Banner mit Slogan */}
-          <div className="poster-top-banner">
-            <span>DEIN SONG. DEIN MOMENT.</span>
+          {/* Konfetti-Sternchen im Hintergrund */}
+          <div className="poster-confetti" aria-hidden>
+            <ConfettiBackground />
           </div>
 
           <div className="poster-content">
-            {/* Eyebrow */}
+            {/* Titel-Block */}
+            {title.bigNumber ? (
+              <div className="title-stack">
+                <span className="title-lead">{title.lead}</span>
+                <span className="title-big">
+                  <span className="title-big-number">{title.bigNumber}</span>
+                  <CrownIcon />
+                </span>
+                <span className="title-trail">{title.trail}</span>
+              </div>
+            ) : (
+              <h1 className="title-single">{name}</h1>
+            )}
+
+            {/* DEIN SONG. DEIN MOMENT. Banner */}
+            <div className="poster-banner">DEIN SONG. DEIN MOMENT.</div>
+
+            {/* Eyebrow mit Herzen */}
             <div className="poster-eyebrow">
-              <span className="eb-dot" /> Wunschsong an {djName}{" "}
-              <span className="eb-dot" />
+              <span className="heart">♥</span> Wunschsong an {djName}{" "}
+              <span className="heart">♥</span>
             </div>
 
-            {/* Titel — Event-Name */}
-            <h1 className="poster-title">{name}</h1>
-
-            {tagline && <p className="poster-tagline">{tagline}</p>}
-
-            <p className="poster-date">{dateLabel}</p>
-
-            {/* QR-Sektion mit Sprechblasen-Icons links/rechts */}
+            {/* QR + Sprechblasen-Icons links/rechts */}
             <div className="poster-qr-row">
-              <div className="poster-qr-side poster-qr-left">
-                <PhoneIcon />
+              <div className="poster-qr-side">
+                <PhoneIcon color="#ff2e93" />
                 <span className="qr-label qr-label-pink">SCAN MICH!</span>
-                <ArrowCurve direction="right" />
+                <ArrowPink />
               </div>
 
               <div className="poster-qr-frame">
                 <canvas ref={canvasRef} className="poster-qr" />
               </div>
 
-              <div className="poster-qr-side poster-qr-right">
-                <HeadphonesIcon />
+              <div className="poster-qr-side">
+                <HeadphonesIcon color="#22d3ee" />
                 <span className="qr-label qr-label-cyan">
                   DEIN SONG
                   <br />
@@ -119,7 +163,10 @@ export default function PosterCard({
               </div>
             </div>
 
-            {/* Steps-Sektion */}
+            {/* Datum-Box mit cyan Rahmen */}
+            <div className="poster-date-box">{dateLabel}</div>
+
+            {/* Steps */}
             <h3 className="poster-steps-heading">
               <span className="note">♪</span> SO EINFACH GEHT&apos;S:
             </h3>
@@ -128,7 +175,7 @@ export default function PosterCard({
               <div className="step">
                 <div className="step-num step-num-pink">1</div>
                 <div className="step-icon">
-                  <PhoneIcon small />
+                  <PhoneIcon color="#22d3ee" small />
                 </div>
                 <div className="step-label">
                   QR CODE
@@ -163,30 +210,20 @@ export default function PosterCard({
               </div>
             </div>
 
-            {/* Dezente Push-Zeile */}
-            <p className="poster-push-hint">
-              🔔 Wir benachrichtigen dich, wenn dein Song läuft.
-            </p>
-
-            {/* Bottom-CTA-Box */}
-            <div className="poster-bottom-cta">
-              SCAN &amp; WÜNSCH DIR JETZT{" "}
-              <span className="cta-highlight">DEINEN SONG!</span>
-            </div>
+            {/* Bottom-CTA */}
+            <div className="poster-bottom-cta">DEIN SONG MACHT DIE PARTY!</div>
 
             {/* Footer */}
             <div className="poster-footer">
+              <span className="powered-by">POWERED BY</span>
               {validLogoStyle ? (
                 <span className="footer-logo">
-                  <DjLogo style={validLogoStyle} size={20} />
+                  <DjLogo style={validLogoStyle} size={22} />
                 </span>
               ) : (
                 <span className="footer-mark">w</span>
               )}
-              <span className="footer-text">
-                wishbeat <span className="footer-sep">·</span>{" "}
-                <span className="footer-handle">zamy82</span>
-              </span>
+              <span className="footer-brand">wishbeat</span>
             </div>
           </div>
         </article>
@@ -201,7 +238,12 @@ export default function PosterCard({
         .poster-card {
           width: 210mm;
           min-height: 297mm;
-          background: #0a0a16;
+          background: radial-gradient(
+              ellipse at 30% 20%,
+              #1a0f24 0%,
+              #0a0a16 60%
+            ),
+            #0a0a16;
           border-radius: 3mm;
           box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
           overflow: hidden;
@@ -210,93 +252,141 @@ export default function PosterCard({
           color: #ffffff;
           -webkit-print-color-adjust: exact;
           print-color-adjust: exact;
-          display: flex;
-          flex-direction: column;
         }
 
-        /* Top-Banner */
-        .poster-top-banner {
-          background: linear-gradient(90deg, #ff2e93 0%, #a855f7 50%, #22d3ee 100%);
-          color: #ffffff;
-          text-align: center;
-          padding: 5mm 8mm;
-          font-weight: 900;
-          font-size: 16pt;
-          letter-spacing: 0.04em;
+        .poster-confetti {
+          position: absolute;
+          inset: 0;
+          opacity: 0.55;
+          pointer-events: none;
+          z-index: 0;
         }
 
         .poster-content {
-          padding: 8mm 12mm 6mm 12mm;
+          position: relative;
+          z-index: 1;
+          padding: 14mm 14mm 8mm 14mm;
           display: flex;
           flex-direction: column;
           align-items: center;
           text-align: center;
-          flex: 1;
+          min-height: 297mm;
+        }
+
+        /* ───── Titel-Stack (mit grosser Zahl) ───── */
+        .title-stack {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 0;
+          margin-bottom: 3mm;
+        }
+
+        .title-lead {
+          font-family: var(--font-pacifico), "Brush Script MT", cursive;
+          font-size: 56pt;
+          line-height: 0.95;
+          color: #ff2e93;
+          text-shadow:
+            0 0 6px #ff2e93,
+            0 0 20px rgba(255, 46, 147, 0.7),
+            0 0 36px rgba(255, 46, 147, 0.4);
+          transform: rotate(-3deg);
+          padding: 0 6mm;
+        }
+
+        .title-big {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          gap: 8mm;
+          margin-top: -2mm;
+        }
+
+        .title-big-number {
+          font-size: 130pt;
+          font-weight: 900;
+          line-height: 1;
+          color: transparent;
+          -webkit-text-stroke: 2px #ff2e93;
+          text-stroke: 2px #ff2e93;
+          letter-spacing: -0.02em;
+          text-shadow:
+            0 0 12px rgba(255, 46, 147, 0.8),
+            0 0 32px rgba(255, 46, 147, 0.5),
+            0 0 60px rgba(168, 85, 247, 0.4);
+        }
+
+        .title-trail {
+          font-family: var(--font-pacifico), "Brush Script MT", cursive;
+          font-size: 44pt;
+          line-height: 0.95;
+          color: #ff2e93;
+          text-shadow:
+            0 0 6px #ff2e93,
+            0 0 18px rgba(255, 46, 147, 0.65);
+          transform: rotate(-2deg);
+          margin-top: -3mm;
+          padding: 0 6mm;
+        }
+
+        /* Fallback: kein big number — voller Cursive-Titel */
+        .title-single {
+          font-family: var(--font-pacifico), "Brush Script MT", cursive;
+          font-size: 56pt;
+          line-height: 1.05;
+          color: #ff2e93;
+          text-shadow:
+            0 0 6px #ff2e93,
+            0 0 22px rgba(255, 46, 147, 0.7),
+            0 0 40px rgba(255, 46, 147, 0.4);
+          margin: 0 0 4mm 0;
+          padding: 0 6mm;
+          font-weight: normal;
+        }
+
+        /* ───── DEIN SONG. DEIN MOMENT. Banner ───── */
+        .poster-banner {
+          margin: 4mm 0 3mm 0;
+          padding: 3mm 12mm;
+          background: linear-gradient(90deg, #ff2e93 0%, #a855f7 50%, #22d3ee 100%);
+          color: #ffffff;
+          font-weight: 900;
+          font-size: 15pt;
+          letter-spacing: 0.06em;
+          border-radius: 1.5mm;
+          box-shadow:
+            0 0 18px rgba(255, 46, 147, 0.45),
+            0 0 38px rgba(34, 211, 238, 0.25);
         }
 
         /* Eyebrow */
         .poster-eyebrow {
+          color: #ffffff;
+          font-size: 11pt;
+          font-weight: 700;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          margin-bottom: 5mm;
           display: inline-flex;
           align-items: center;
           gap: 6px;
-          color: #22d3ee;
-          font-size: 11pt;
-          font-weight: 700;
-          letter-spacing: 0.2em;
-          text-transform: uppercase;
-          margin-bottom: 4mm;
         }
 
-        .eb-dot {
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-          background: #ff2e93;
-          display: inline-block;
+        .heart {
+          color: #ff2e93;
+          font-size: 12pt;
+          text-shadow: 0 0 8px rgba(255, 46, 147, 0.7);
         }
 
-        /* Titel */
-        .poster-title {
-          font-size: 36pt;
-          font-weight: 900;
-          letter-spacing: -0.01em;
-          line-height: 1.05;
-          margin: 0;
-          padding: 0 4px 0.05em 4px;
-          background: linear-gradient(135deg, #ff2e93 0%, #ff75c5 35%, #22d3ee 100%);
-          -webkit-background-clip: text;
-          background-clip: text;
-          color: transparent;
-          text-shadow:
-            0 0 30px rgba(255, 46, 147, 0.35),
-            0 0 60px rgba(34, 211, 238, 0.18);
-          max-width: 180mm;
-        }
-
-        .poster-tagline {
-          font-size: 14pt;
-          color: #ff75c5;
-          font-style: italic;
-          font-weight: 500;
-          margin: 3mm 0 0 0;
-        }
-
-        .poster-date {
-          font-size: 9pt;
-          letter-spacing: 0.18em;
-          text-transform: uppercase;
-          color: #9ca3af;
-          margin: 2mm 0 0 0;
-        }
-
-        /* QR-Sektion */
+        /* ───── QR-Sektion ───── */
         .poster-qr-row {
-          margin: 6mm 0 6mm 0;
           display: grid;
           grid-template-columns: 1fr auto 1fr;
           align-items: center;
-          gap: 4mm;
+          gap: 6mm;
           width: 100%;
+          margin: 2mm 0 3mm 0;
         }
 
         .poster-qr-side {
@@ -309,7 +399,7 @@ export default function PosterCard({
 
         .qr-label {
           font-weight: 900;
-          font-size: 11pt;
+          font-size: 12pt;
           letter-spacing: 0.06em;
           text-align: center;
           line-height: 1.1;
@@ -317,24 +407,24 @@ export default function PosterCard({
 
         .qr-label-pink {
           color: #ff2e93;
-          text-shadow: 0 0 12px rgba(255, 46, 147, 0.55);
+          text-shadow: 0 0 14px rgba(255, 46, 147, 0.7);
         }
 
         .qr-label-cyan {
           color: #22d3ee;
-          text-shadow: 0 0 12px rgba(34, 211, 238, 0.55);
+          text-shadow: 0 0 14px rgba(34, 211, 238, 0.7);
         }
 
-        /* QR-Rahmen mit Neon-Glow */
+        /* QR-Rahmen mit PINKEM Neon-Glow (statt cyan) */
         .poster-qr-frame {
           padding: 4mm;
           background: #ffffff;
-          border: 3px solid #22d3ee;
+          border: 3px solid #ff2e93;
           border-radius: 3mm;
           box-shadow:
             0 0 0 1px rgba(255, 255, 255, 0.05),
-            0 0 25px rgba(34, 211, 238, 0.55),
-            0 0 50px rgba(34, 211, 238, 0.25);
+            0 0 25px rgba(255, 46, 147, 0.7),
+            0 0 60px rgba(255, 46, 147, 0.35);
         }
 
         .poster-qr {
@@ -343,9 +433,26 @@ export default function PosterCard({
           height: 70mm !important;
         }
 
+        /* Datum-Box mit Cyan-Rahmen */
+        .poster-date-box {
+          margin: 4mm 0 5mm 0;
+          padding: 2.5mm 10mm;
+          border: 2px solid #22d3ee;
+          border-radius: 1.5mm;
+          font-weight: 800;
+          font-size: 12pt;
+          color: #22d3ee;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          text-shadow: 0 0 10px rgba(34, 211, 238, 0.55);
+          box-shadow:
+            inset 0 0 12px rgba(34, 211, 238, 0.15),
+            0 0 14px rgba(34, 211, 238, 0.3);
+        }
+
         /* Steps */
         .poster-steps-heading {
-          margin: 4mm 0 4mm 0;
+          margin: 1mm 0 4mm 0;
           font-size: 14pt;
           font-weight: 900;
           color: #ffffff;
@@ -388,16 +495,16 @@ export default function PosterCard({
 
         .step-num-pink {
           background: #ff2e93;
-          box-shadow: 0 0 12px rgba(255, 46, 147, 0.45);
+          box-shadow: 0 0 14px rgba(255, 46, 147, 0.55);
         }
         .step-num-purple {
           background: #a855f7;
-          box-shadow: 0 0 12px rgba(168, 85, 247, 0.45);
+          box-shadow: 0 0 14px rgba(168, 85, 247, 0.55);
         }
         .step-num-cyan {
           background: #22d3ee;
           color: #0a0a16;
-          box-shadow: 0 0 12px rgba(34, 211, 238, 0.45);
+          box-shadow: 0 0 14px rgba(34, 211, 238, 0.55);
         }
 
         .step-icon {
@@ -421,61 +528,56 @@ export default function PosterCard({
           margin-top: 1mm;
           font-weight: 700;
           letter-spacing: 0.05em;
+          text-shadow: 0 0 6px rgba(255, 46, 147, 0.5);
         }
 
-        /* Push-Hinweis */
-        .poster-push-hint {
-          margin: 5mm 0 3mm 0;
-          font-size: 9pt;
-          color: #94a3b8;
-          font-weight: 500;
-        }
-
-        /* Bottom-CTA-Box */
+        /* Bottom CTA */
         .poster-bottom-cta {
-          margin: 3mm 0 4mm 0;
+          margin: auto auto 4mm auto;
           width: 100%;
           max-width: 170mm;
           padding: 4mm 6mm;
-          background: rgba(255, 46, 147, 0.08);
-          border: 2px solid;
-          border-image: linear-gradient(90deg, #ff2e93, #22d3ee) 1;
-          border-radius: 2mm;
+          background: rgba(255, 46, 147, 0.06);
+          border: 2px solid #ff2e93;
+          border-radius: 1.5mm;
           text-align: center;
           font-weight: 900;
-          font-size: 13pt;
+          font-size: 14pt;
           color: #ffffff;
-          letter-spacing: 0.03em;
-        }
-
-        .cta-highlight {
-          background: linear-gradient(90deg, #ff2e93, #22d3ee);
-          -webkit-background-clip: text;
-          background-clip: text;
-          color: transparent;
+          letter-spacing: 0.06em;
+          text-shadow: 0 0 10px rgba(255, 46, 147, 0.6);
+          box-shadow:
+            0 0 20px rgba(255, 46, 147, 0.4),
+            inset 0 0 20px rgba(255, 46, 147, 0.08);
         }
 
         /* Footer */
         .poster-footer {
-          margin-top: auto;
-          padding-top: 3mm;
+          padding-top: 2mm;
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 6px;
-          font-size: 9pt;
+          gap: 8px;
+          font-size: 10pt;
+        }
+
+        .powered-by {
+          color: rgba(255, 255, 255, 0.4);
+          font-weight: 700;
+          letter-spacing: 0.18em;
+          font-size: 8pt;
         }
 
         .footer-mark {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          width: 5mm;
-          height: 5mm;
+          width: 6mm;
+          height: 6mm;
           border-radius: 50%;
           background: linear-gradient(135deg, #ff2e93, #22d3ee);
           color: #ffffff;
-          font-size: 8pt;
+          font-size: 9pt;
           font-weight: 900;
         }
 
@@ -483,27 +585,18 @@ export default function PosterCard({
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          width: 6mm;
-          height: 6mm;
+          width: 7mm;
+          height: 7mm;
         }
-
         .footer-logo svg {
           width: 100%;
           height: 100%;
         }
 
-        .footer-text {
-          color: rgba(255, 255, 255, 0.5);
-          font-weight: 700;
-        }
-
-        .footer-sep {
-          color: rgba(255, 255, 255, 0.25);
-        }
-
-        .footer-handle {
-          color: #a855f7;
+        .footer-brand {
+          color: rgba(255, 255, 255, 0.7);
           font-weight: 800;
+          letter-spacing: 0.02em;
         }
 
         /* Druck-Ansicht */
@@ -512,7 +605,6 @@ export default function PosterCard({
             size: A4 portrait;
             margin: 0;
           }
-
           html,
           body {
             background: #0a0a16 !important;
@@ -521,15 +613,12 @@ export default function PosterCard({
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
           }
-
           .no-print {
             display: none !important;
           }
-
           .poster-stage {
             padding: 0 !important;
           }
-
           .poster-card {
             box-shadow: none;
             border-radius: 0;
@@ -544,10 +633,40 @@ export default function PosterCard({
 }
 
 /* ────────────────────────────────────────────────────────────
-   Inline SVG-Icons fuer Print-Schaerfe
+   Inline SVGs
    ──────────────────────────────────────────────────────────── */
 
-function PhoneIcon({ small = false }: { small?: boolean }) {
+function CrownIcon() {
+  return (
+    <svg
+      width={64}
+      height={48}
+      viewBox="0 0 64 48"
+      fill="none"
+      stroke="#ff2e93"
+      strokeWidth="2.5"
+      strokeLinejoin="round"
+      style={{
+        filter: "drop-shadow(0 0 8px rgba(255,46,147,0.75))",
+        flexShrink: 0
+      }}
+    >
+      <path d="M6 38 L10 12 L22 28 L32 8 L42 28 L54 12 L58 38 Z" />
+      <line x1="6" y1="42" x2="58" y2="42" />
+      <circle cx="10" cy="10" r="2.5" fill="#ff2e93" />
+      <circle cx="32" cy="5" r="2.5" fill="#ff2e93" />
+      <circle cx="54" cy="10" r="2.5" fill="#ff2e93" />
+    </svg>
+  );
+}
+
+function PhoneIcon({
+  small = false,
+  color = "#22d3ee"
+}: {
+  small?: boolean;
+  color?: string;
+}) {
   const size = small ? 28 : 36;
   return (
     <svg
@@ -555,30 +674,30 @@ function PhoneIcon({ small = false }: { small?: boolean }) {
       height={size}
       viewBox="0 0 24 24"
       fill="none"
-      stroke="#22d3ee"
+      stroke={color}
       strokeWidth="1.8"
-      style={{ filter: "drop-shadow(0 0 8px rgba(34,211,238,0.55))" }}
+      style={{ filter: `drop-shadow(0 0 8px ${color}88)` }}
     >
       <rect x="6" y="2" width="12" height="20" rx="3" />
       <line x1="11" y1="18.5" x2="13" y2="18.5" />
-      <rect x="9" y="6" width="6" height="4" rx="0.5" stroke="#22d3ee" />
+      <rect x="9" y="6" width="6" height="4" rx="0.5" />
       <path d="M8 14 L10 13 L11 14 L13 12 L16 14" />
     </svg>
   );
 }
 
-function HeadphonesIcon() {
+function HeadphonesIcon({ color = "#22d3ee" }: { color?: string }) {
   return (
     <svg
       width={36}
       height={36}
       viewBox="0 0 24 24"
       fill="none"
-      stroke="#22d3ee"
+      stroke={color}
       strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
-      style={{ filter: "drop-shadow(0 0 8px rgba(34,211,238,0.55))" }}
+      style={{ filter: `drop-shadow(0 0 8px ${color}88)` }}
     >
       <path d="M4 14 V12 a8 8 0 0 1 16 0 v2" />
       <rect x="3" y="14" width="4" height="6" rx="1.2" />
@@ -594,7 +713,7 @@ function SpotifyIcon() {
       height={32}
       viewBox="0 0 24 24"
       fill="#1DB954"
-      style={{ filter: "drop-shadow(0 0 8px rgba(29,185,84,0.45))" }}
+      style={{ filter: "drop-shadow(0 0 8px rgba(29,185,84,0.55))" }}
     >
       <path d="M12 0a12 12 0 1 0 0 24 12 12 0 0 0 0-24Zm5.5 17.3a.75.75 0 0 1-1.03.25c-2.82-1.72-6.36-2.11-10.55-1.16a.75.75 0 1 1-.33-1.46c4.55-1.04 8.46-.59 11.65 1.34.36.22.47.69.26 1.03Zm1.46-3.24a.94.94 0 0 1-1.29.31c-3.23-1.98-8.15-2.56-11.98-1.4a.94.94 0 0 1-.55-1.79c4.38-1.34 9.81-.69 13.5 1.6.45.27.6.86.32 1.28Zm.13-3.36c-3.86-2.3-10.24-2.51-13.93-1.39a1.12 1.12 0 1 1-.66-2.14c4.23-1.3 11.27-1.05 15.71 1.6a1.12 1.12 0 1 1-1.12 1.93Z" />
     </svg>
@@ -612,7 +731,7 @@ function PaperPlaneIcon() {
       strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
-      style={{ filter: "drop-shadow(0 0 8px rgba(34,211,238,0.55))" }}
+      style={{ filter: "drop-shadow(0 0 8px rgba(34,211,238,0.6))" }}
     >
       <path d="M3 11 L21 3 L13 21 L11 13 L3 11 Z" />
       <path d="M11 13 L21 3" />
@@ -620,8 +739,7 @@ function PaperPlaneIcon() {
   );
 }
 
-function ArrowCurve({ direction }: { direction: "left" | "right" }) {
-  // Geschwungener Pfeil von "SCAN MICH!" zum QR-Code (zeigt nach rechts)
+function ArrowPink() {
   return (
     <svg
       width={44}
@@ -634,12 +752,75 @@ function ArrowCurve({ direction }: { direction: "left" | "right" }) {
       style={{
         position: "absolute",
         bottom: -8,
-        [direction === "right" ? "right" : "left"]: -28,
-        filter: "drop-shadow(0 0 6px rgba(255,46,147,0.5))"
+        right: -28,
+        filter: "drop-shadow(0 0 6px rgba(255,46,147,0.6))"
       }}
     >
       <path d="M2 14 Q 20 0, 38 14" />
       <path d="M30 8 L38 14 L32 20" />
     </svg>
   );
+}
+
+function ConfettiBackground() {
+  // 24 zufaellig verteilte Sternchen + Punkte als Konfetti
+  const items = [
+    { x: 6, y: 4, s: 8, c: "#ff2e93", t: "star" },
+    { x: 92, y: 6, s: 7, c: "#22d3ee", t: "star" },
+    { x: 14, y: 10, s: 4, c: "#a855f7", t: "dot" },
+    { x: 88, y: 14, s: 5, c: "#ff2e93", t: "dot" },
+    { x: 3, y: 22, s: 6, c: "#22d3ee", t: "star" },
+    { x: 96, y: 26, s: 5, c: "#fde047", t: "star" },
+    { x: 8, y: 38, s: 4, c: "#a855f7", t: "dot" },
+    { x: 94, y: 42, s: 6, c: "#ff2e93", t: "star" },
+    { x: 2, y: 52, s: 5, c: "#22d3ee", t: "dot" },
+    { x: 98, y: 58, s: 4, c: "#a855f7", t: "dot" },
+    { x: 6, y: 68, s: 7, c: "#ff2e93", t: "star" },
+    { x: 92, y: 72, s: 5, c: "#22d3ee", t: "dot" },
+    { x: 10, y: 82, s: 6, c: "#fde047", t: "star" },
+    { x: 88, y: 88, s: 5, c: "#a855f7", t: "star" },
+    { x: 4, y: 94, s: 4, c: "#22d3ee", t: "dot" },
+    { x: 96, y: 96, s: 5, c: "#ff2e93", t: "dot" },
+    { x: 20, y: 6, s: 3, c: "#fde047", t: "dot" },
+    { x: 80, y: 10, s: 4, c: "#a855f7", t: "star" },
+    { x: 16, y: 92, s: 4, c: "#ff2e93", t: "dot" },
+    { x: 84, y: 94, s: 5, c: "#22d3ee", t: "star" }
+  ];
+  return (
+    <svg
+      width="100%"
+      height="100%"
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+    >
+      {items.map((i, idx) =>
+        i.t === "star" ? (
+          <polygon
+            key={idx}
+            points={starPoints(i.x, i.y, i.s / 10)}
+            fill={i.c}
+            opacity={0.85}
+          />
+        ) : (
+          <circle key={idx} cx={i.x} cy={i.y} r={i.s / 8} fill={i.c} opacity={0.7} />
+        )
+      )}
+    </svg>
+  );
+}
+
+function starPoints(cx: number, cy: number, r: number): string {
+  // 4-Punkt-Sparkle-Stern (dünn, eleganter als 5-Punkt)
+  return [
+    [cx, cy - r],
+    [cx + r * 0.25, cy - r * 0.25],
+    [cx + r, cy],
+    [cx + r * 0.25, cy + r * 0.25],
+    [cx, cy + r],
+    [cx - r * 0.25, cy + r * 0.25],
+    [cx - r, cy],
+    [cx - r * 0.25, cy - r * 0.25]
+  ]
+    .map(([x, y]) => `${x},${y}`)
+    .join(" ");
 }

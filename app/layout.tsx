@@ -1,5 +1,15 @@
 import type { Metadata, Viewport } from "next";
+import { Pacifico } from "next/font/google";
 import "./globals.css";
+
+// Skript-Font fuer Party-Poster (Cursive-Style). Wird via CSS-Variable
+// global verfuegbar gemacht, aber nur dort genutzt wo wir ihn brauchen.
+const pacifico = Pacifico({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-pacifico",
+  display: "swap"
+});
 
 export const metadata: Metadata = {
   title: "wishbeat — Wunschsongs für den DJ",
@@ -23,7 +33,7 @@ export default function RootLayout({
   children
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="de">
+    <html lang="de" className={pacifico.variable}>
       <body className="font-sans antialiased">{children}</body>
     </html>
   );
