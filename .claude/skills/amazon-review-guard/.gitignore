@@ -1,0 +1,9 @@
+# Runtime artifacts — never commit review data, classifications, or reports.
+__pycache__/
+*.pyc
+
+data/*
+!data/.gitkeep
+
+output/*
+!output/.gitkeep
