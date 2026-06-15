@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "amazon-review-guard"
+version = "0.1.0"
+description = "Detect Sportstech Amazon reviews that violate Amazon's community guidelines and prepare report-ready evidence packets. Submission is human-confirmed."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+dependencies = [
+    "anthropic>=0.69",
+    "openpyxl>=3.1",
+    "PyYAML>=6.0",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+review-guard = "review_guard.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/review_guard"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

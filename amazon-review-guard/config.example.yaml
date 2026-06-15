@@ -1,0 +1,34 @@
+# amazon-review-guard configuration — copy to config.yaml and edit.
+
+# Sportstech ASINs to monitor. Replace placeholders with real product ASINs.
+asins:
+  - B000000000  # placeholder — replace with a real Sportstech ASIN
+  - B000000001  # placeholder — replace with a real Sportstech ASIN
+
+# Only flag a review when confidence >= this threshold (0.0–1.0). Conservative.
+confidence_threshold: 0.80
+
+# Claude model used for the violation decision.
+model: claude-opus-4-8
+
+# Where reviews come from. Never scrapes Amazon pages directly.
+data_source:
+  # one of: csv | json | agentcentral | api
+  type: csv
+  # csv / json: path to the local export (relative to this config file)
+  path: data/reviews_export.csv
+  # agentcentral: path to JSON saved from the agentcentral MCP review tools
+  agentcentral_path: data/agentcentral_reviews.json
+  # api: third-party review-data API (optional)
+  api:
+    base_url: https://api.example-reviews.com/v1/reviews
+    # API key is read from this environment variable. Never hard-code it.
+    key_env: REVIEW_DATA_API_KEY
+
+# Working and output paths (relative to this config file).
+paths:
+  reviews: data/reviews.jsonl
+  classifications: data/classifications.jsonl
+  report_queue: output/report_queue.xlsx
+  audit_log: output/audit_log.jsonl
+  report_actions: output/report_actions.jsonl

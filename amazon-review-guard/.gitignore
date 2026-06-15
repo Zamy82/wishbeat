@@ -1,0 +1,16 @@
+# Runtime artifacts and local config — never commit review data or secrets.
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# Local config (copy from config.example.yaml). API keys live in env vars, not here.
+config.yaml
+
+# Working data and generated reports
+data/*
+!data/.gitkeep
+output/*
+!output/.gitkeep
