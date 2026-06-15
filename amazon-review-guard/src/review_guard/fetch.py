@@ -29,7 +29,17 @@ FIELD_ALIASES: dict[str, list[str]] = {
     "date": ["date", "review_date", "reviewDate", "submitted_at", "timestamp", "created_at"],
     "helpful_votes": ["helpful_votes", "helpful", "helpful_count", "helpfulVotes", "num_helpful"],
     "url": ["url", "review_url", "link", "permalink"],
+    "verified": ["verified", "verified_purchase", "is_verified", "verifizierter_kauf", "verifizierterKauf"],
+    "product": ["product", "product_name", "item_name", "productTitle", "product_title"],
 }
+
+
+def _to_bool(value: Any) -> bool | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in ("1", "true", "yes", "y", "verified", "verifiziert", "verifizierter kauf")
 
 
 def _first(raw: dict[str, Any], names: list[str]) -> Any:
@@ -65,6 +75,8 @@ def normalize(raw: dict[str, Any]) -> dict[str, Any]:
         "date": str(_first(raw, FIELD_ALIASES["date"]) or "").strip(),
         "helpful_votes": _to_int(_first(raw, FIELD_ALIASES["helpful_votes"])),
         "url": str(_first(raw, FIELD_ALIASES["url"]) or "").strip(),
+        "verified": _to_bool(_first(raw, FIELD_ALIASES["verified"])),
+        "product": str(_first(raw, FIELD_ALIASES["product"]) or "").strip(),
     }
 
 
