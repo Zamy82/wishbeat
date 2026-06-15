@@ -8,6 +8,10 @@ asins:
 # Only flag a review when confidence >= this threshold (0.0–1.0). Conservative.
 confidence_threshold: 0.80
 
+# A review counts as "negative" in the dashboard when rating <= this value.
+# (Negativity is only used for the dashboard view — never to decide a violation.)
+negative_max_rating: 3
+
 # Claude model used for the violation decision.
 model: claude-opus-4-8
 
@@ -32,3 +36,4 @@ paths:
   report_queue: output/report_queue.xlsx
   audit_log: output/audit_log.jsonl
   report_actions: output/report_actions.jsonl
+  dashboard: output/dashboard.html

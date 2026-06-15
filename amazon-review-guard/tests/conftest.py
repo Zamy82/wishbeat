@@ -24,6 +24,7 @@ def project(tmp_path: Path):
               - B000000000
               - B000000001
             confidence_threshold: 0.80
+            negative_max_rating: 3
             model: claude-opus-4-8
             data_source:
               type: csv
@@ -38,6 +39,7 @@ def project(tmp_path: Path):
               report_queue: output/report_queue.xlsx
               audit_log: output/audit_log.jsonl
               report_actions: output/report_actions.jsonl
+              dashboard: output/dashboard.html
             """
         ),
         encoding="utf-8",

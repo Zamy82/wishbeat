@@ -17,6 +17,7 @@ class Config:
     model: str
     data_source: dict[str, Any]
     paths: dict[str, str]
+    negative_max_rating: int = 3
     base_dir: Path = field(default_factory=Path.cwd)
 
     def path(self, key: str) -> Path:
@@ -45,5 +46,6 @@ def load_config(config_path: str | Path = "config.yaml") -> Config:
         model=raw.get("model", "claude-opus-4-8"),
         data_source=raw.get("data_source", {}),
         paths=raw.get("paths", {}),
+        negative_max_rating=int(raw.get("negative_max_rating", 3)),
         base_dir=config_path.parent,
     )

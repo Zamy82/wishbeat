@@ -31,6 +31,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("report", help="Write the audit log and the report queue (.xlsx).")
 
+    sub.add_parser("dashboard", help="Build the HTML review dashboard (analytics, read-only).")
+
     p_submit = sub.add_parser("submit", help="Process approved rows one at a time (human-confirmed).")
     p_submit.add_argument("--mode", choices=["manual", "assisted"], default="manual")
     p_submit.add_argument("--dry-run", action="store_true", help="List pending approved rows, no prompts.")
@@ -64,6 +66,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"report queue: {r['flagged']} flagged (confidence >= "
               f"{config.confidence_threshold}) -> {r['queue_path']}")
 
+    elif args.command == "dashboard":
+        from .dashboard import run_dashboard
+        s = run_dashboard(config)
+        print(f"dashboard: {s['total_negative']} negative reviews, "
+              f"{s['negative_violations']} violate policy -> {s['dashboard_path']}")
+
     elif args.command == "submit":
         from .submit import run_submit
         result = run_submit(config, mode=args.mode, dry_run=args.dry_run)
@@ -81,6 +89,9 @@ def main(argv: Sequence[str] | None = None) -> int:
               f"({stats['flagged']} flagged, {stats['errored']} errored)")
         r = run_report(config)
         print(f"report queue: {r['flagged']} flagged -> {r['queue_path']}")
+        from .dashboard import run_dashboard
+        s = run_dashboard(config)
+        print(f"dashboard -> {s['dashboard_path']}")
         print("Next: a human marks approved rows, then run 'review-guard submit'.")
 
     return 0
