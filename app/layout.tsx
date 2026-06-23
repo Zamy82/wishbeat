@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Pacifico } from "next/font/google";
 import SiteFooter from "@/components/SiteFooter";
+import AutoReload from "@/components/AutoReload";
 import "./globals.css";
 
 // Skript-Font fuer Party-Poster (Cursive-Style). Wird via CSS-Variable
@@ -36,6 +37,7 @@ export default function RootLayout({
   return (
     <html lang="de" className={pacifico.variable}>
       <body className="font-sans antialiased min-h-screen flex flex-col">
+        <AutoReload />
         <div className="flex-1">{children}</div>
         <SiteFooter />
       </body>
