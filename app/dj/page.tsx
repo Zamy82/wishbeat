@@ -31,6 +31,12 @@ export default async function DjDashboardPage() {
         </div>
         <div className="flex gap-3 flex-wrap">
           <Link
+            href="/dj/insights"
+            className="px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold text-sm transition"
+          >
+            📊 Wissensdatenbank
+          </Link>
+          <Link
             href="/dj/assistant"
             className="px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold text-sm transition"
           >
