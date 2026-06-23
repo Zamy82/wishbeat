@@ -7,6 +7,7 @@ import LiveQueueDisplay from "./LiveQueueDisplay";
 import WishesVotingList from "./WishesVotingList";
 import LastEventTracker from "./LastEventTracker";
 import PublicDjReviews from "./PublicDjReviews";
+import BookingRequestButton from "./BookingRequestButton";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -95,6 +96,13 @@ export default async function EventPage({ params }: Props) {
         ownerId={event.owner_id}
         currentEventId={event.id}
         djDisplayName={djDisplayName}
+      />
+
+      {/* Buchungs-Anfrage — fuer begeisterte Gaeste die eigene Party planen */}
+      <BookingRequestButton
+        djUserId={event.owner_id}
+        djDisplayName={djDisplayName}
+        referrerEventId={event.id}
       />
 
       {/* Trinkgeld — wenn DJ IBAN oder PayPal eingetragen hat */}

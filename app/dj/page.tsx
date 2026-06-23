@@ -17,6 +17,12 @@ export default async function DjDashboardPage() {
     .eq("owner_id", user.id)
     .order("event_date", { ascending: false });
 
+  const { count: newBookingsCount } = await supabase
+    .from("booking_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("dj_user_id", user.id)
+    .eq("status", "new");
+
   return (
     <main className="min-h-screen px-4 py-10 max-w-2xl mx-auto">
       <header className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-8">
@@ -30,6 +36,17 @@ export default async function DjDashboardPage() {
           </div>
         </div>
         <div className="flex gap-3 flex-wrap">
+          <Link
+            href="/dj/bookings"
+            className="relative px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold text-sm transition"
+          >
+            📅 Anfragen
+            {newBookingsCount && newBookingsCount > 0 ? (
+              <span className="absolute -top-1.5 -right-1.5 bg-neon-pink text-white text-[10px] font-bold rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center shadow-lg shadow-neon-pink/50">
+                {newBookingsCount}
+              </span>
+            ) : null}
+          </Link>
           <Link
             href="/dj/insights"
             className="px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold text-sm transition"
