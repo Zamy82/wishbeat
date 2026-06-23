@@ -161,6 +161,7 @@ export default function CrowdPulse({ eventId }: Props) {
         <CountBlock
           emoji="🔥"
           label="Feuer"
+          hint="Geiler Song!"
           count={counts.fire}
           total={total}
           color="bg-orange-500"
@@ -168,6 +169,7 @@ export default function CrowdPulse({ eventId }: Props) {
         <CountBlock
           emoji="💃"
           label="Tanze"
+          hint="Tanzt gerade"
           count={counts.dance}
           total={total}
           color="bg-neon-pink"
@@ -175,6 +177,7 @@ export default function CrowdPulse({ eventId }: Props) {
         <CountBlock
           emoji="😴"
           label="Wechsel"
+          hint="Bitte was anderes"
           count={counts.meh}
           total={total}
           color="bg-white/50"
@@ -193,12 +196,14 @@ export default function CrowdPulse({ eventId }: Props) {
 function CountBlock({
   emoji,
   label,
+  hint,
   count,
   total,
   color
 }: {
   emoji: string;
   label: string;
+  hint: string;
   count: number;
   total: number;
   color: string;
@@ -210,6 +215,9 @@ function CountBlock({
       <div className="text-white text-2xl font-black leading-tight">{count}</div>
       <div className="text-white/40 text-[10px] uppercase tracking-wider mt-0.5">
         {label}
+      </div>
+      <div className="text-white/35 text-[10px] mt-0.5 text-center leading-tight px-1">
+        {hint}
       </div>
       {/* Mini-Balken */}
       <div className="mt-2 w-full h-1 bg-white/10 rounded-full overflow-hidden">

@@ -17,23 +17,32 @@ interface Props {
   trackId: string;
 }
 
-const BUTTONS: { key: Reaction; emoji: string; label: string; activeClasses: string }[] = [
+const BUTTONS: {
+  key: Reaction;
+  emoji: string;
+  label: string;
+  hint: string;
+  activeClasses: string;
+}[] = [
   {
     key: "fire",
     emoji: "🔥",
     label: "Feuer!",
+    hint: "Geiler Song!",
     activeClasses: "bg-orange-500/30 border-orange-400 text-orange-200 shadow-lg shadow-orange-500/30"
   },
   {
     key: "dance",
     emoji: "💃",
     label: "Tanze!",
+    hint: "Ich tanze gerade",
     activeClasses: "bg-neon-pink/30 border-neon-pink text-neon-pink shadow-lg shadow-neon-pink/30"
   },
   {
     key: "meh",
     emoji: "😴",
     label: "Wechsel",
+    hint: "Bitte was anderes",
     activeClasses: "bg-white/15 border-white/40 text-white/80 shadow-lg shadow-white/10"
   }
 ];
@@ -166,6 +175,13 @@ export default function LiveReactions({ eventId, trackId }: Props) {
             <span className="text-2xl leading-none">{b.emoji}</span>
             <span className="text-[10px] font-bold uppercase tracking-wider mt-1">
               {b.label}
+            </span>
+            <span
+              className={`text-[9px] mt-0.5 leading-tight px-1 ${
+                active ? "opacity-90" : "text-white/45"
+              }`}
+            >
+              {b.hint}
             </span>
             {count > 0 && (
               <span
