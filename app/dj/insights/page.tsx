@@ -28,6 +28,9 @@ interface ReactionRow {
 interface RatingRow {
   event_id: string;
   rating: number;
+  comment: string | null;
+  nickname: string | null;
+  created_at: string;
 }
 
 export default async function InsightsPage() {
@@ -79,8 +82,9 @@ export default async function InsightsPage() {
       .in("event_id", eventIds),
     supabase
       .from("event_ratings")
-      .select("event_id, rating")
+      .select("event_id, rating, comment, nickname, created_at")
       .in("event_id", eventIds)
+      .order("created_at", { ascending: false })
   ]);
 
   return (

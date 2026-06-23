@@ -6,6 +6,7 @@ import RatingSection from "./RatingSection";
 import LiveQueueDisplay from "./LiveQueueDisplay";
 import WishesVotingList from "./WishesVotingList";
 import LastEventTracker from "./LastEventTracker";
+import PublicDjReviews from "./PublicDjReviews";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -88,6 +89,13 @@ export default async function EventPage({ params }: Props) {
 
       {/* Bewertung — auch bei beendeten Events erlaubt (Feedback nachträglich) */}
       <RatingSection eventId={event.id} eventName={event.name} />
+
+      {/* Oeffentliche Bewertungen aus anderen Events fuer denselben DJ */}
+      <PublicDjReviews
+        ownerId={event.owner_id}
+        currentEventId={event.id}
+        djDisplayName={djDisplayName}
+      />
 
       {/* Trinkgeld — wenn DJ IBAN oder PayPal eingetragen hat */}
       {canTip && djProfile && (

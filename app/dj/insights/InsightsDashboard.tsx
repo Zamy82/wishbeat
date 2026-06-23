@@ -28,6 +28,9 @@ interface ReactionRow {
 interface RatingRow {
   event_id: string;
   rating: number;
+  comment: string | null;
+  nickname: string | null;
+  created_at: string;
 }
 
 interface Props {
@@ -404,6 +407,14 @@ export default function InsightsDashboard({
             />
           </div>
 
+          {/* ⭐ Bewertungs-Sektion */}
+          {filtered.ratings.length > 0 && (
+            <RatingsSection
+              ratings={filtered.ratings}
+              events={filtered.events}
+            />
+          )}
+
           {/* Top Künstler */}
           <div className="rounded-3xl border border-white/10 bg-white/5 p-5">
             <h3 className="text-xs uppercase tracking-widest text-white/40 font-semibold mb-3">
@@ -517,6 +528,143 @@ function RankedList({
         </ol>
       )}
     </div>
+  );
+}
+
+function RatingsSection({
+  ratings,
+  events
+}: {
+  ratings: RatingRow[];
+  events: EventRow[];
+}) {
+  const eventNameById = new Map(events.map((e) => [e.id, e.name]));
+
+  // Star-Verteilung 1..5
+  const distribution = [1, 2, 3, 4, 5].map((star) => ({
+    star,
+    count: ratings.filter((r) => r.rating === star).length
+  }));
+  const maxCount = Math.max(1, ...distribution.map((d) => d.count));
+
+  // Pro-Event-Schnitt
+  const perEvent = new Map<string, { sum: number; count: number }>();
+  for (const r of ratings) {
+    const e = perEvent.get(r.event_id) ?? { sum: 0, count: 0 };
+    e.sum += r.rating;
+    e.count += 1;
+    perEvent.set(r.event_id, e);
+  }
+  const eventAverages = Array.from(perEvent.entries())
+    .map(([eventId, { sum, count }]) => ({
+      eventId,
+      name: eventNameById.get(eventId) ?? "—",
+      avg: Math.round((sum / count) * 10) / 10,
+      count
+    }))
+    .sort((a, b) => b.avg - a.avg);
+
+  const withComment = ratings.filter(
+    (r) => r.comment && r.comment.trim().length > 0
+  );
+
+  return (
+    <section className="rounded-3xl border border-yellow-400/30 bg-gradient-to-br from-yellow-400/5 to-amber-500/5 p-5">
+      <h3 className="text-xs uppercase tracking-widest text-yellow-300 font-semibold mb-4 flex items-center gap-2">
+        <span>⭐</span> Bewertungen
+      </h3>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Sterne-Verteilung */}
+        <div>
+          <p className="text-white/40 text-[10px] uppercase tracking-widest mb-3 font-semibold">
+            Verteilung
+          </p>
+          <div className="flex flex-col gap-1.5">
+            {[...distribution].reverse().map((d) => (
+              <div key={d.star} className="flex items-center gap-2">
+                <span className="text-yellow-300 text-xs w-8 font-bold">
+                  {d.star}★
+                </span>
+                <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-yellow-400 to-amber-300 transition-all"
+                    style={{ width: `${(d.count / maxCount) * 100}%` }}
+                  />
+                </div>
+                <span className="text-white/70 text-xs font-mono w-8 text-right">
+                  {d.count}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Pro Event */}
+        <div>
+          <p className="text-white/40 text-[10px] uppercase tracking-widest mb-3 font-semibold">
+            Pro Event
+          </p>
+          {eventAverages.length === 0 ? (
+            <p className="text-white/40 text-sm">Keine Daten</p>
+          ) : (
+            <ol className="flex flex-col gap-2">
+              {eventAverages.map((e) => (
+                <li
+                  key={e.eventId}
+                  className="flex items-center justify-between gap-3"
+                >
+                  <span className="text-white text-sm font-semibold truncate">
+                    {e.name}
+                  </span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-yellow-300 text-sm font-bold">
+                      ⭐ {e.avg}
+                    </span>
+                    <span className="text-white/30 text-[10px]">
+                      ({e.count})
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      </div>
+
+      {/* Kommentare */}
+      {withComment.length > 0 && (
+        <div className="mt-6 pt-5 border-t border-white/10">
+          <p className="text-white/40 text-[10px] uppercase tracking-widest mb-3 font-semibold">
+            Letzte Kommentare ({withComment.length})
+          </p>
+          <ul className="flex flex-col gap-3">
+            {withComment.slice(0, 8).map((r, i) => (
+              <li
+                key={`${r.event_id}-${r.created_at}-${i}`}
+                className="rounded-2xl border border-white/10 bg-white/5 p-3"
+              >
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="text-yellow-300 text-sm font-bold">
+                    {"★".repeat(r.rating)}
+                    <span className="text-white/15">
+                      {"★".repeat(5 - r.rating)}
+                    </span>
+                  </span>
+                  <span className="text-white/30 text-[10px]">
+                    {r.nickname?.trim() || "Anonym"} ·{" "}
+                    {eventNameById.get(r.event_id) ?? "—"}
+                  </span>
+                </div>
+                <p className="text-white/80 text-sm leading-relaxed">
+                  „{r.comment}"
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
   );
 }
 
