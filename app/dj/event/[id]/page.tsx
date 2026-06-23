@@ -11,6 +11,7 @@ import DjPushOptIn from "./DjPushOptIn";
 import ResetWishlistButton from "./ResetWishlistButton";
 import DedupePlaysButton from "./DedupePlaysButton";
 import CrowdPulse from "./CrowdPulse";
+import TopBoosts from "./TopBoosts";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -126,6 +127,9 @@ export default async function DjEventPage({ params }: Props) {
 
       {/* Live-Reaktionen der Gaeste auf den aktuellen Song */}
       <CrowdPulse eventId={id} />
+
+      {/* Top-Boosts auf kommende Spotify-Queue-Songs */}
+      <TopBoosts eventId={id} />
 
       <section>
         <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">

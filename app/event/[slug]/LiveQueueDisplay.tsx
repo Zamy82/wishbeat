@@ -32,10 +32,17 @@ interface Props {
 
 type Toast = { kind: "ok" | "info"; text: string; cover?: string | null } | null;
 
+interface BoostRow {
+  spotify_track_id: string;
+  session_id: string;
+}
+
 export default function LiveQueueDisplay({ eventId }: Props) {
   const [data, setData] = useState<QueueResp | null>(null);
   const [toast, setToast] = useState<Toast>(null);
   const [ownRequests, setOwnRequests] = useState<OwnRequest[]>([]);
+  const [boosts, setBoosts] = useState<BoostRow[]>([]);
+  const [busyBoost, setBusyBoost] = useState<string | null>(null);
   const lastNotifiedRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string>("");
 
@@ -43,6 +50,89 @@ export default function LiveQueueDisplay({ eventId }: Props) {
   useEffect(() => {
     sessionIdRef.current = getGuestSessionId();
   }, []);
+
+  // Boosts auf Live-Queue-Songs laden + Realtime
+  useEffect(() => {
+    const supabase = createClient();
+    async function loadBoosts() {
+      const { data: rows } = await supabase
+        .from("live_queue_boosts")
+        .select("spotify_track_id, session_id")
+        .eq("event_id", eventId);
+      if (rows) setBoosts(rows as BoostRow[]);
+    }
+    loadBoosts();
+    const channel = supabase
+      .channel(`live-boosts-${eventId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "live_queue_boosts",
+          filter: `event_id=eq.${eventId}`
+        },
+        () => loadBoosts()
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [eventId]);
+
+  async function toggleBoost(trackId: string) {
+    const sid = sessionIdRef.current;
+    if (!sid || busyBoost) return;
+    setBusyBoost(trackId);
+
+    // Optimistic
+    const had = boosts.some(
+      (b) => b.spotify_track_id === trackId && b.session_id === sid
+    );
+    if (had) {
+      setBoosts((prev) =>
+        prev.filter(
+          (b) => !(b.spotify_track_id === trackId && b.session_id === sid)
+        )
+      );
+    } else {
+      setBoosts((prev) => [
+        ...prev,
+        { spotify_track_id: trackId, session_id: sid }
+      ]);
+    }
+
+    try {
+      const res = await fetch("/api/queue-boost", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_id: eventId,
+          track_id: trackId,
+          session_id: sid
+        })
+      });
+      if (!res.ok) {
+        // Rollback
+        if (had) {
+          setBoosts((prev) => [
+            ...prev,
+            { spotify_track_id: trackId, session_id: sid }
+          ]);
+        } else {
+          setBoosts((prev) =>
+            prev.filter(
+              (b) => !(b.spotify_track_id === trackId && b.session_id === sid)
+            )
+          );
+        }
+      }
+    } catch {
+      // Realtime-Refetch wird auch korrigieren
+    } finally {
+      setBusyBoost(null);
+    }
+  }
 
   // Eigene Wünsche initial laden + per Realtime aktualisieren
   useEffect(() => {
@@ -237,13 +327,23 @@ export default function LiveQueueDisplay({ eventId }: Props) {
           {/* Als nächstes (max 8) */}
           {data.next.length > 0 && (
             <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
-              <p className="text-xs uppercase tracking-widest text-white/40 font-semibold mb-3">
-                Als nächstes
-              </p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">
+                  Als nächstes
+                </p>
+                <p className="text-[10px] text-white/30">tippe ❤️ um zu pushen</p>
+              </div>
               <ol className="flex flex-col gap-2">
                 {data.next.map((t, i) => {
                   const isOwn = ownRequests.some(
                     (r) => r.spotify_track_id === t.id
+                  );
+                  const trackBoosts = boosts.filter(
+                    (b) => b.spotify_track_id === t.id
+                  );
+                  const boostCount = trackBoosts.length;
+                  const myBoost = trackBoosts.some(
+                    (b) => b.session_id === sessionIdRef.current
                   );
                   return (
                     <li key={`${t.id}-${i}`} className="flex items-center gap-3">
@@ -272,6 +372,26 @@ export default function LiveQueueDisplay({ eventId }: Props) {
                           DEIN WUNSCH
                         </span>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => toggleBoost(t.id)}
+                        disabled={busyBoost === t.id}
+                        className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold border transition flex-shrink-0 ${
+                          myBoost
+                            ? "bg-neon-pink/20 text-neon-pink border-neon-pink/50"
+                            : "bg-white/5 text-white/60 border-white/15 hover:bg-white/10 hover:border-white/30"
+                        } ${busyBoost === t.id ? "opacity-50" : ""}`}
+                        title={myBoost ? "Push zurücknehmen" : "Diesen Song pushen"}
+                      >
+                        <span className="text-sm leading-none">
+                          {myBoost ? "❤️" : "🤍"}
+                        </span>
+                        {boostCount > 0 && (
+                          <span className="font-mono text-[10px]">
+                            {boostCount}
+                          </span>
+                        )}
+                      </button>
                     </li>
                   );
                 })}
