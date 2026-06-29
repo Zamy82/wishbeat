@@ -12,11 +12,6 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-interface SpotifyMe {
-  id: string;
-  display_name?: string;
-}
-
 interface SpotifyPlaylist {
   id: string;
   external_urls: { spotify: string };
@@ -86,24 +81,9 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
     }
   }
 
-  // 1) Spotify-User-ID holen
-  const meRes = await fetch("https://api.spotify.com/v1/me", {
-    headers: { Authorization: `Bearer ${accessToken}` },
-    cache: "no-store"
-  });
-  if (!meRes.ok) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "spotify_me_failed",
-        message: `Spotify /me fehlgeschlagen (${meRes.status}). Verbinde Spotify ggf. neu.`
-      },
-      { status: 500 }
-    );
-  }
-  const me = (await meRes.json()) as SpotifyMe;
-
-  // 2) Playlist erstellen
+  // Playlist erstellen via /v1/me/playlists.
+  // (Im Spotify Development-Mode ist /v1/users/{id}/playlists gesperrt,
+  //  der /me/playlists Endpoint funktioniert aber.)
   const dateLabel = new Date(event.event_date).toLocaleDateString("de-DE", {
     day: "2-digit",
     month: "long",
@@ -113,7 +93,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
   const description = `Setlist von ${dateLabel} — alle ${uniqueTrackIds.length} gespielten Songs, in der Reihenfolge wie sie liefen. Erstellt von wishbeat.`;
 
   const createRes = await fetch(
-    `https://api.spotify.com/v1/users/${encodeURIComponent(me.id)}/playlists`,
+    "https://api.spotify.com/v1/me/playlists",
     {
       method: "POST",
       headers: {
