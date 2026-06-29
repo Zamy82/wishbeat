@@ -12,6 +12,7 @@ import ResetWishlistButton from "./ResetWishlistButton";
 import DedupePlaysButton from "./DedupePlaysButton";
 import CrowdPulse from "./CrowdPulse";
 import TopBoosts from "./TopBoosts";
+import MemoryPlaylistButton from "./MemoryPlaylistButton";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -149,6 +150,15 @@ export default async function DjEventPage({ params }: Props) {
         </div>
         <LiveQueue eventId={id} initialRequests={requests ?? []} />
       </section>
+
+      {/* Memory-Playlist auf Spotify — Erinnerung fuer den Gastgeber */}
+      <MemoryPlaylistButton
+        eventId={id}
+        eventName={event.name}
+        initialUrl={event.memory_playlist_url ?? null}
+        initialCreatedAt={event.memory_playlist_created_at ?? null}
+        playsCount={plays?.length ?? 0}
+      />
 
       <section className="mt-10">
         <h2 className="text-lg font-semibold text-white/80 mb-4">📊 Statistik</h2>

@@ -7,7 +7,8 @@ import { createClient } from "@/lib/supabase/server";
 export const SPOTIFY_SCOPES = [
   "user-modify-playback-state",
   "user-read-playback-state",
-  "user-read-currently-playing"
+  "user-read-currently-playing",
+  "playlist-modify-private"
 ].join(" ");
 
 interface SpotifyTokenRow {
