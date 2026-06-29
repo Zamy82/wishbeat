@@ -151,13 +151,16 @@ export default async function DjEventPage({ params }: Props) {
         <LiveQueue eventId={id} initialRequests={requests ?? []} />
       </section>
 
-      {/* Memory-Playlist auf Spotify — Erinnerung fuer den Gastgeber */}
+      {/* Setlist-Export — Erinnerung fuer den Gastgeber als WhatsApp-Text */}
       <MemoryPlaylistButton
         eventId={id}
         eventName={event.name}
-        initialUrl={event.memory_playlist_url ?? null}
-        initialCreatedAt={event.memory_playlist_created_at ?? null}
-        playsCount={plays?.length ?? 0}
+        eventDate={event.event_date}
+        plays={(plays ?? []).map((p) => ({
+          spotify_track_id: p.spotify_track_id,
+          title: p.title,
+          artist: p.artist
+        }))}
       />
 
       <section className="mt-10">

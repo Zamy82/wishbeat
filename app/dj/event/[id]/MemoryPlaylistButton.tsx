@@ -1,208 +1,170 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+
+interface PlayItem {
+  spotify_track_id: string;
+  title: string;
+  artist: string;
+}
 
 interface Props {
   eventId: string;
   eventName: string;
-  initialUrl: string | null;
-  initialCreatedAt: string | null;
-  playsCount: number;
+  eventDate: string;
+  plays: PlayItem[];
 }
 
-type Status =
-  | { kind: "idle" }
-  | { kind: "loading" }
-  | { kind: "ready"; url: string; createdAt: string | null }
-  | { kind: "error"; message: string; missingScope?: boolean };
+// Setlist-Export — kein Spotify-Playlist-Endpoint mehr (im Spotify-Dev-Mode
+// gesperrt, braucht "Extended Quota" was 2-4 Wochen Antragsdauer hat).
+// Stattdessen: schoener Setlist-Text mit Spotify-Links zum Teilen via WhatsApp.
 
 export default function MemoryPlaylistButton({
-  eventId,
   eventName,
-  initialUrl,
-  initialCreatedAt,
-  playsCount
+  eventDate,
+  plays
 }: Props) {
-  const [status, setStatus] = useState<Status>(
-    initialUrl
-      ? { kind: "ready", url: initialUrl, createdAt: initialCreatedAt }
-      : { kind: "idle" }
-  );
   const [copied, setCopied] = useState(false);
 
-  async function create() {
-    setStatus({ kind: "loading" });
-    try {
-      const res = await fetch(`/api/events/${eventId}/memory-playlist`, {
-        method: "POST"
-      });
-      const data = await res.json();
-      if (!data.ok) {
-        setStatus({
-          kind: "error",
-          message: data.message ?? "Unbekannter Fehler",
-          missingScope: data.error === "missing_scope"
-        });
-        return;
+  // Duplikate entfernen, Reihenfolge beibehalten
+  const unique: PlayItem[] = (() => {
+    const seen = new Set<string>();
+    const out: PlayItem[] = [];
+    for (const p of plays) {
+      if (!seen.has(p.spotify_track_id)) {
+        seen.add(p.spotify_track_id);
+        out.push(p);
       }
-      setStatus({
-        kind: "ready",
-        url: data.playlist_url,
-        createdAt: new Date().toISOString()
-      });
-    } catch (e) {
-      setStatus({
-        kind: "error",
-        message: e instanceof Error ? e.message : "Netzwerk-Fehler"
-      });
     }
-  }
+    return out;
+  })();
 
-  async function copyLink(url: string) {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // ignore
-    }
-  }
-
-  async function shareWhatsApp(url: string) {
-    const text = `🎵 Hier sind alle Songs von "${eventName}" als Spotify-Playlist:\n\n${url}\n\nViel Spaß beim Wiederhören! 💃`;
-    const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(waUrl, "_blank");
-  }
-
-  if (playsCount === 0) {
+  if (unique.length === 0) {
     return (
       <section className="mt-6 rounded-3xl border border-white/10 bg-white/5 p-5">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-xl">🎵</span>
           <span className="text-xs uppercase tracking-widest text-white/40 font-semibold">
-            Memory-Playlist
+            Setlist als Erinnerung
           </span>
         </div>
         <p className="text-white/50 text-sm">
-          Sobald Songs gespielt wurden, kannst du hier eine Spotify-Playlist mit
-          allen Tracks erstellen — perfekt zum Verschicken an den Gastgeber.
+          Sobald Songs gespielt wurden, kannst du hier die Setlist als Text mit
+          Spotify-Links generieren — zum Verschicken an den Gastgeber.
         </p>
       </section>
     );
   }
 
+  const dateLabel = new Date(eventDate).toLocaleDateString("de-DE", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric"
+  });
+
+  const setlistLines = unique.map(
+    (p, i) =>
+      `${i + 1}. ${p.title} — ${p.artist}\n   https://open.spotify.com/track/${p.spotify_track_id}`
+  );
+
+  const fullText =
+    `🎵 ${eventName} — Setlist vom ${dateLabel}\n` +
+    `${unique.length} Songs in der Reihenfolge wie gespielt 💃\n\n` +
+    setlistLines.join("\n\n") +
+    `\n\n— erstellt mit wishbeat`;
+
+  // Kompakte WhatsApp-Version (ohne Links, sonst zu lang)
+  const compactText =
+    `🎵 ${eventName} — Setlist vom ${dateLabel}\n` +
+    `${unique.length} Songs wie sie gespielt wurden 💃\n\n` +
+    unique
+      .map((p, i) => `${i + 1}. ${p.title} — ${p.artist}`)
+      .join("\n") +
+    `\n\n— erstellt mit wishbeat`;
+
+  async function copyFull() {
+    try {
+      await navigator.clipboard.writeText(fullText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      // ignore
+    }
+  }
+
+  function shareWhatsApp() {
+    const url = `https://wa.me/?text=${encodeURIComponent(compactText)}`;
+    window.open(url, "_blank");
+  }
+
+  function downloadTxt() {
+    const blob = new Blob([fullText], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const safeName = eventName.replace(/[^\p{L}\p{N}\s-]/gu, "").trim().replace(/\s+/g, "-");
+    a.download = `${safeName}-setlist.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <section className="mt-6 rounded-3xl border border-[#1DB954]/40 bg-gradient-to-br from-[#1DB954]/10 via-transparent to-transparent p-5">
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xl">🎵</span>
-            <span className="text-xs uppercase tracking-widest text-[#1ed760] font-semibold">
-              Memory-Playlist
-            </span>
-          </div>
-          <p className="text-white text-sm font-semibold">
-            Alle gespielten Songs als Spotify-Playlist
-          </p>
-          <p className="text-white/50 text-xs mt-0.5">
-            {playsCount} Songs in der Reihenfolge wie sie liefen — perfekt zum
-            Verschicken an den Gastgeber.
-          </p>
-        </div>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-xl">🎵</span>
+        <span className="text-xs uppercase tracking-widest text-[#1ed760] font-semibold">
+          Setlist als Erinnerung
+        </span>
+      </div>
+      <p className="text-white text-sm font-semibold mb-1">
+        Alle gespielten Songs zum Verschicken
+      </p>
+      <p className="text-white/50 text-xs mb-4">
+        {unique.length} Songs in der Reihenfolge wie sie liefen — als Text, mit
+        Spotify-Link pro Song. Perfekt für eine WhatsApp an den Gastgeber.
+      </p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <button
+          type="button"
+          onClick={shareWhatsApp}
+          className="py-3 rounded-2xl bg-[#25D366] hover:bg-[#1eb858] text-white font-bold text-sm transition active:scale-95"
+        >
+          💬 An WhatsApp
+        </button>
+        <button
+          type="button"
+          onClick={copyFull}
+          className="py-3 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold text-sm transition active:scale-95"
+        >
+          {copied ? "✅ Kopiert!" : "📋 Kopieren"}
+        </button>
+        <button
+          type="button"
+          onClick={downloadTxt}
+          className="py-3 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-semibold text-sm transition active:scale-95"
+        >
+          💾 Als .txt
+        </button>
       </div>
 
-      {status.kind === "idle" && (
-        <button
-          type="button"
-          onClick={create}
-          className="w-full py-3 rounded-2xl bg-[#1DB954] hover:bg-[#1ed760] text-white font-bold text-sm transition active:scale-95"
-        >
-          🎵 Playlist auf Spotify erstellen
-        </button>
-      )}
+      <details className="mt-4">
+        <summary className="text-white/40 hover:text-white/70 text-xs cursor-pointer transition">
+          Vorschau der Setlist
+        </summary>
+        <pre className="mt-3 rounded-2xl bg-black/40 border border-white/10 p-3 text-[11px] text-white/80 leading-relaxed overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap">
+          {compactText}
+        </pre>
+      </details>
 
-      {status.kind === "loading" && (
-        <button
-          type="button"
-          disabled
-          className="w-full py-3 rounded-2xl bg-[#1DB954]/60 text-white font-bold text-sm flex items-center justify-center gap-2"
-        >
-          <span className="inline-block animate-spin">🎵</span>
-          Erstelle Playlist…
-        </button>
-      )}
-
-      {status.kind === "ready" && (
-        <div className="flex flex-col gap-2">
-          <a
-            href={status.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full py-3 rounded-2xl bg-[#1DB954] hover:bg-[#1ed760] text-white font-bold text-sm transition text-center"
-          >
-            ▶️ Playlist auf Spotify öffnen
-          </a>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => shareWhatsApp(status.url)}
-              className="py-2.5 rounded-2xl bg-[#25D366]/20 border border-[#25D366]/40 text-[#25D366] hover:bg-[#25D366]/30 font-semibold text-xs transition"
-            >
-              💬 Per WhatsApp teilen
-            </button>
-            <button
-              type="button"
-              onClick={() => copyLink(status.url)}
-              className="py-2.5 rounded-2xl bg-white/10 border border-white/20 text-white hover:bg-white/15 font-semibold text-xs transition"
-            >
-              {copied ? "✅ Kopiert!" : "📋 Link kopieren"}
-            </button>
-          </div>
-          {status.createdAt && (
-            <p className="text-white/30 text-[10px] text-center mt-1">
-              Erstellt am{" "}
-              {new Date(status.createdAt).toLocaleDateString("de-DE", {
-                day: "2-digit",
-                month: "long",
-                year: "numeric"
-              })}
-            </p>
-          )}
-          <button
-            type="button"
-            onClick={create}
-            className="text-white/40 hover:text-white text-xs underline underline-offset-2 mt-1"
-          >
-            Neu generieren (mit aktuellen Songs)
-          </button>
-        </div>
-      )}
-
-      {status.kind === "error" && (
-        <div className="space-y-2">
-          <div className="rounded-2xl bg-red-500/10 border border-red-500/30 p-3 text-sm text-red-200">
-            ⚠ {status.message}
-          </div>
-          {status.missingScope && (
-            <div className="rounded-2xl bg-yellow-500/10 border border-yellow-500/30 p-3 text-xs text-yellow-200 leading-relaxed">
-              <p className="font-semibold mb-1">So fixt du das:</p>
-              <ol className="list-decimal list-inside space-y-0.5">
-                <li>Geh zum DJ-Dashboard</li>
-                <li>Klicke neben dem Spotify-Status auf „trennen"</li>
-                <li>Verbinde Spotify erneut — diesmal wirst du nach erweiterten Berechtigungen gefragt</li>
-                <li>Komm zurück hierher</li>
-              </ol>
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={create}
-            className="w-full py-2 rounded-2xl bg-white/10 hover:bg-white/15 text-white text-sm transition"
-          >
-            Nochmal versuchen
-          </button>
-        </div>
-      )}
+      <p className="text-white/30 text-[10px] mt-4 leading-relaxed">
+        Hinweis: Eine echte Spotify-Playlist mit allen Songs auf 1 Klick wäre
+        cooler, aber Spotify hat für Dev-Apps das Hinzufügen von Tracks zu
+        Playlists gesperrt (Extended-Quota-Antrag dauert 2-4 Wochen). Diese
+        Setlist als Text + Links erfüllt aber denselben Zweck.
+      </p>
     </section>
   );
 }
