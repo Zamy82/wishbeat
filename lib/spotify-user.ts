@@ -25,7 +25,11 @@ export function buildAuthorizeUrl(state: string, redirectUri: string): string {
     response_type: "code",
     redirect_uri: redirectUri,
     scope: SPOTIFY_SCOPES,
-    state
+    state,
+    // show_dialog=true zwingt Spotify den Berechtigungs-Dialog jedes Mal neu
+    // anzuzeigen. Verhindert dass Spotify alte Berechtigungen still wieder-
+    // verwendet wenn wir neue Scopes (z.B. playlist-modify-private) brauchen.
+    show_dialog: "true"
   });
   return `https://accounts.spotify.com/authorize?${params.toString()}`;
 }
