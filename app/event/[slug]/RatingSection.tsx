@@ -39,12 +39,16 @@ export default function RatingSection({ eventId, eventName }: Props) {
     setSaving(true);
 
     const supabase = createClient();
-    const { error } = await supabase.from("event_ratings").insert({
-      event_id: eventId,
-      rating,
-      comment: comment.trim() || null,
-      nickname: nickname.trim() || null
-    });
+    const { data, error } = await supabase
+      .from("event_ratings")
+      .insert({
+        event_id: eventId,
+        rating,
+        comment: comment.trim() || null,
+        nickname: nickname.trim() || null
+      })
+      .select("id")
+      .single();
 
     setSaving(false);
 
@@ -57,6 +61,15 @@ export default function RatingSection({ eventId, eventName }: Props) {
       localStorage.setItem(localStorageKey, "1");
     }
     setSubmitted(true);
+
+    // DJ per Push benachrichtigen (fire-and-forget, fehlerfest)
+    if (data?.id) {
+      fetch("/api/push/notify-rating", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating_id: data.id })
+      }).catch(() => {});
+    }
   }
 
   if (submitted) {

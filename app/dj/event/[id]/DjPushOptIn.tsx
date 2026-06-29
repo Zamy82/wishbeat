@@ -60,11 +60,11 @@ export default function DjPushOptIn() {
       <span className="text-2xl flex-shrink-0">🔔</span>
       <div className="flex-1 min-w-0">
         <p className="text-white font-semibold text-sm">
-          Push-Benachrichtigung für neue Wünsche aktivieren
+          Push-Benachrichtigung für neue Wünsche & Bewertungen aktivieren
         </p>
         <p className="text-white/60 text-xs mt-1">
           Du bekommst eine Mitteilung auf den Browser/Handy sobald ein Gast einen
-          Wunsch absendet — auch wenn die App im Hintergrund läuft.
+          Wunsch absendet oder dich bewertet — auch wenn die App im Hintergrund läuft.
         </p>
         <div className="flex items-center gap-2 mt-3">
           {state === "denied" ? (
