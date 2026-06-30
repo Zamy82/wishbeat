@@ -15,7 +15,7 @@ interface Props {
   hasPaypal: boolean;
 }
 
-const PRESET_AMOUNTS = [2, 4, 6];
+const PRESET_AMOUNTS = [5, 10, 20];
 
 type Method = "bank" | "paypal";
 
@@ -28,7 +28,7 @@ export default function TipSection({
   hasBank,
   hasPaypal
 }: Props) {
-  const [amount, setAmount] = useState<number | null>(2);
+  const [amount, setAmount] = useState<number | null>(5);
   const [customAmount, setCustomAmount] = useState("");
   const [method, setMethod] = useState<Method>(hasPaypal ? "paypal" : "bank");
   const [showFull, setShowFull] = useState(false);
