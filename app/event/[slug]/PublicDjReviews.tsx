@@ -33,12 +33,12 @@ export default function PublicDjReviews({
     let cancelled = false;
     async function load() {
       const supabase = createClient();
-      // Erst alle Events des DJs holen (außer dem aktuellen)
+      // Alle Events des DJs holen (auch das aktuelle — Gaeste sollen die
+      // komplette Bewertungs-Historie sehen, inkl. der neuesten von heute)
       const { data: evs } = await supabase
         .from("events")
         .select("id, name")
-        .eq("owner_id", ownerId)
-        .neq("id", currentEventId);
+        .eq("owner_id", ownerId);
       if (!evs || evs.length === 0) {
         if (!cancelled) setReviews([]);
         return;
@@ -105,7 +105,7 @@ export default function PublicDjReviews({
           </div>
           <p className="text-yellow-300 text-sm font-semibold">
             {avg} / 5 · {reviews.length}{" "}
-            {reviews.length === 1 ? "Bewertung" : "Bewertungen"} von früheren Events
+            {reviews.length === 1 ? "Bewertung" : "Bewertungen"} insgesamt
           </p>
         </div>
 
