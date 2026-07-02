@@ -10,7 +10,11 @@ import { matchPercent, matchTone } from "@/lib/vibe-match";
 
 interface Props {
   eventId: string;
+  paypalHandle?: string | null;
+  djDisplayName?: string;
 }
+
+const QUICK_TIP_AMOUNTS = [2, 4, 6];
 
 function useDebounce<T extends (...args: Parameters<T>) => void>(fn: T, ms: number) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -23,7 +27,11 @@ function useDebounce<T extends (...args: Parameters<T>) => void>(fn: T, ms: numb
   );
 }
 
-export default function SongRequestForm({ eventId }: Props) {
+export default function SongRequestForm({
+  eventId,
+  paypalHandle,
+  djDisplayName
+}: Props) {
   const [query, setQuery] = useState("");
   const [tracks, setTracks] = useState<SpotifyTrack[]>([]);
   const [selected, setSelected] = useState<SpotifyTrack | null>(null);
@@ -31,6 +39,10 @@ export default function SongRequestForm({ eventId }: Props) {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Trinkgeld-Prompt-Status nach Wunsch-Submit
+  const [tipStatus, setTipStatus] = useState<"pending" | "given" | "later">(
+    "pending"
+  );
   // Push-Status nach Submit: ok = wird benachrichtigt, oder Grund
   const [pushStatus, setPushStatus] = useState<
     { ok: true } | { ok: false; reason: string } | null
@@ -231,6 +243,25 @@ export default function SongRequestForm({ eventId }: Props) {
         {/* Push-Status: zeigt klar ob Browser-Push aktiv ist */}
         <PushStatusBox status={pushStatus} isIosNoPwa={isIosNoPwa} />
 
+        {/* Trinkgeld-Prompt — Impuls im emotionalen Peak. Nur wenn PayPal
+            beim DJ hinterlegt und der Gast noch keine Entscheidung getroffen
+            hat. */}
+        {paypalHandle && tipStatus === "pending" && (
+          <QuickTipPrompt
+            paypalHandle={paypalHandle}
+            djDisplayName={djDisplayName || "den DJ"}
+            onGiven={() => setTipStatus("given")}
+            onLater={() => setTipStatus("later")}
+          />
+        )}
+
+        {tipStatus === "given" && (
+          <div className="rounded-2xl bg-neon-pink/15 border border-neon-pink/40 px-5 py-3 text-neon-pink text-sm font-semibold flex items-center gap-2">
+            <span className="text-lg">💝</span>
+            Danke — {djDisplayName || "der DJ"} freut sich riesig!
+          </div>
+        )}
+
         <button
           onClick={() => {
             setSubmitted(false);
@@ -239,6 +270,8 @@ export default function SongRequestForm({ eventId }: Props) {
             setTracks([]);
             setNickname("");
             setPushStatus(null);
+            // tipStatus BEWUSST nicht resetten — sonst wird der Gast bei
+            // jedem weiteren Wunsch erneut nach Trinkgeld gefragt (nervt)
           }}
           className="mt-4 px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white text-sm transition"
         >
@@ -491,6 +524,53 @@ function VibeMatchBadge({
       <span className="font-medium">🎚 Vibe-Match</span>
       <span className="font-bold text-base">{percent}%</span>
       <span className="opacity-80">{label}</span>
+    </div>
+  );
+}
+
+function QuickTipPrompt({
+  paypalHandle,
+  djDisplayName,
+  onGiven,
+  onLater
+}: {
+  paypalHandle: string;
+  djDisplayName: string;
+  onGiven: () => void;
+  onLater: () => void;
+}) {
+  return (
+    <div className="w-full max-w-sm rounded-3xl border border-neon-pink/30 bg-gradient-to-br from-neon-pink/10 to-neon-purple/5 p-5">
+      <p className="text-white font-semibold text-sm text-center">
+        💝 {djDisplayName} freut sich über ein kleines Trinkgeld
+      </p>
+      <p className="text-white/50 text-xs mt-1 mb-4 text-center">
+        Freiwillig — 2 Klicks in PayPal reichen.
+      </p>
+      <div className="grid grid-cols-3 gap-2">
+        {QUICK_TIP_AMOUNTS.map((amount) => (
+          <a
+            key={amount}
+            href={`https://paypal.me/${paypalHandle}/${amount}EUR`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={onGiven}
+            className="py-3 rounded-2xl bg-gradient-to-r from-neon-pink to-neon-purple text-white font-bold text-sm text-center transition active:scale-95 hover:opacity-90"
+          >
+            {amount} €
+          </a>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={onLater}
+        className="w-full mt-3 py-2 text-white/40 hover:text-white/70 text-xs transition"
+      >
+        Später vielleicht
+      </button>
+      <p className="text-white/25 text-[10px] mt-2 text-center">
+        Wird als Schenkung an Freund/Familie über PayPal gesendet — keine Gebühren.
+      </p>
     </div>
   );
 }

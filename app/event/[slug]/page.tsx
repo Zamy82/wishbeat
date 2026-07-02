@@ -75,7 +75,11 @@ export default async function EventPage({ params }: Props) {
 
       {event.is_active ? (
         <>
-          <SongRequestForm eventId={event.id} />
+          <SongRequestForm
+            eventId={event.id}
+            paypalHandle={djProfile?.paypal_handle ?? null}
+            djDisplayName={djDisplayName}
+          />
           <div className="mt-8 w-full max-w-md">
             <WishesVotingList eventId={event.id} />
           </div>
