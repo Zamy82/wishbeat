@@ -4,7 +4,6 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { getGuestSessionId } from "@/lib/guest-session";
-import LiveReactions from "./LiveReactions";
 
 interface Track {
   id: string;
@@ -320,8 +319,6 @@ export default function LiveQueueDisplay({ eventId }: Props) {
               </div>
             </div>
 
-            {/* Live-Reactions / Crowd-Pulse */}
-            <LiveReactions eventId={eventId} trackId={data.current.id} />
           </div>
 
           {/* Als nächstes (max 8) */}
