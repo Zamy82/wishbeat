@@ -27,6 +27,12 @@ interface OwnRequest {
 
 interface Props {
   eventId: string;
+  /**
+   * Optionaler Inhalt der zwischen "Jetzt laeuft" und "Geplant" eingefuegt
+   * wird — z.B. die Song-Suche. So bleibt die Wunsch-Aktion prominent
+   * direkt unter dem aktuellen Song, statt hinter langer Queue versteckt.
+   */
+  children?: React.ReactNode;
 }
 
 type Toast = { kind: "ok" | "info"; text: string; cover?: string | null } | null;
@@ -36,7 +42,7 @@ interface BoostRow {
   session_id: string;
 }
 
-export default function LiveQueueDisplay({ eventId }: Props) {
+export default function LiveQueueDisplay({ eventId, children }: Props) {
   const [data, setData] = useState<QueueResp | null>(null);
   const [toast, setToast] = useState<Toast>(null);
   const [ownRequests, setOwnRequests] = useState<OwnRequest[]>([]);
@@ -275,61 +281,72 @@ export default function LiveQueueDisplay({ eventId }: Props) {
           <div className="h-20 rounded-3xl bg-white/5 border border-white/10 animate-pulse" />
         </div>
       ) : !data.playing ? (
-        <div className="w-full max-w-md mb-6">
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-5 text-center">
-            <div className="text-2xl mb-1">⏸️</div>
-            <p className="text-white/60 text-sm font-medium">
-              DJ ist gerade in der Pause
-            </p>
-            <p className="text-white/40 text-xs mt-1">
-              Sobald wieder Musik läuft, siehst du sie hier
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="w-full max-w-md mb-6">
-          {/* Jetzt läuft */}
-          <div className="rounded-3xl border border-neon-purple/40 bg-gradient-to-br from-neon-purple/15 to-neon-pink/5 p-4 mb-3">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neon-pink opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-neon-pink" />
-              </span>
-              <span className="text-xs uppercase tracking-widest text-neon-pink font-semibold">
-                Jetzt läuft
-              </span>
+        <>
+          <div className="w-full max-w-md mb-6">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-5 text-center">
+              <div className="text-2xl mb-1">⏸️</div>
+              <p className="text-white/60 text-sm font-medium">
+                DJ ist gerade in der Pause
+              </p>
+              <p className="text-white/40 text-xs mt-1">
+                Sobald wieder Musik läuft, siehst du sie hier
+              </p>
             </div>
-            <div className="flex items-center gap-3">
-              {data.current.cover_url && (
-                <Image
-                  src={data.current.cover_url}
-                  alt={data.current.album}
-                  width={56}
-                  height={56}
-                  className="rounded-lg flex-shrink-0 shadow-lg"
-                />
-              )}
-              <div className="min-w-0">
-                <p className="text-white font-bold truncate">
-                  {data.current.title}
-                </p>
-                <p className="text-white/70 text-sm truncate">
-                  {data.current.artist}
-                </p>
+          </div>
+          {children}
+        </>
+      ) : (
+        <>
+          {/* Jetzt läuft */}
+          <div className="w-full max-w-md mb-6">
+            <div className="rounded-3xl border border-neon-purple/40 bg-gradient-to-br from-neon-purple/15 to-neon-pink/5 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neon-pink opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-neon-pink" />
+                </span>
+                <span className="text-xs uppercase tracking-widest text-neon-pink font-semibold">
+                  Jetzt läuft
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                {data.current.cover_url && (
+                  <Image
+                    src={data.current.cover_url}
+                    alt={data.current.album}
+                    width={56}
+                    height={56}
+                    className="rounded-lg flex-shrink-0 shadow-lg"
+                  />
+                )}
+                <div className="min-w-0">
+                  <p className="text-white font-bold truncate">
+                    {data.current.title}
+                  </p>
+                  <p className="text-white/70 text-sm truncate">
+                    {data.current.artist}
+                  </p>
+                </div>
               </div>
             </div>
-
           </div>
 
-          {/* Als nächstes (max 8) */}
+          {/* Song-Suche / andere Aktion — zwischen Jetzt läuft und Geplant */}
+          {children}
+
+          {/* Geplant (max 8) — nach der Suche */}
           {data.next.length > 0 && (
-            <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
-              <div className="flex items-center justify-between mb-3">
+            <div className="w-full max-w-md mb-6">
+             <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+              <div className="flex items-center justify-between mb-2">
                 <p className="text-xs uppercase tracking-widest text-white/40 font-semibold">
-                  Als nächstes
+                  Geplant
                 </p>
                 <p className="text-[10px] text-white/30">tippe ❤️ um zu pushen</p>
               </div>
+              <p className="text-[10px] text-white/30 mb-3 italic">
+                Reihenfolge kann sich spontan ändern — der DJ entscheidet.
+              </p>
               <ol className="flex flex-col gap-2">
                 {data.next.map((t, i) => {
                   const isOwn = ownRequests.some(
@@ -393,9 +410,10 @@ export default function LiveQueueDisplay({ eventId }: Props) {
                   );
                 })}
               </ol>
+             </div>
             </div>
           )}
-        </div>
+        </>
       )}
     </>
   );

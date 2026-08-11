@@ -70,12 +70,14 @@ export default async function EventPage({ params }: Props) {
         )}
       </header>
 
-      {/* Live-Queue — was läuft, was kommt als nächstes */}
-      {event.is_active && <LiveQueueDisplay eventId={event.id} />}
-
       {event.is_active ? (
         <>
-          <SongRequestForm eventId={event.id} />
+          {/* Live-Queue mit Suche direkt darin — Reihenfolge:
+              Jetzt läuft → Suche → Geplant. So kommt der Gast in
+              max. 5-10 Sekunden zum Wunsch, statt hinter langer Queue. */}
+          <LiveQueueDisplay eventId={event.id}>
+            <SongRequestForm eventId={event.id} />
+          </LiveQueueDisplay>
           <div className="mt-8 w-full max-w-md">
             <WishesVotingList eventId={event.id} />
           </div>
