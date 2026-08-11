@@ -115,14 +115,14 @@ export default function BookingRequestButton({
           className="w-full rounded-3xl border border-neon-purple/40 bg-gradient-to-r from-neon-pink/15 via-neon-purple/15 to-neon-cyan/15 hover:from-neon-pink/25 hover:via-neon-purple/25 hover:to-neon-cyan/25 p-5 text-left transition active:scale-[0.98]"
         >
           <div className="flex items-start gap-3">
-            <span className="text-2xl">💼</span>
+            <span className="text-2xl">🎉</span>
             <div className="flex-1">
               <p className="text-white font-bold text-base">
-                {djDisplayName} für deine Party buchen
+                Hat dir die Party gefallen?
               </p>
               <p className="text-white/60 text-sm mt-1">
-                Gefällt dir der Vibe? Schick eine unverbindliche Anfrage — Zamy meldet
-                sich bei dir zurück.
+                Hol {djDisplayName} auch auf deine Feier — unverbindlich anfragen,
+                {djDisplayName} meldet sich zurück.
               </p>
             </div>
             <span className="text-white/30 text-lg">→</span>

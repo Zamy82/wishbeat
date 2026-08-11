@@ -481,11 +481,13 @@ function VibeMatchBadge({
     mid: "bg-yellow-500/15 text-yellow-300 border-yellow-500/30",
     low: "bg-red-500/15 text-red-300 border-red-500/30"
   }[tone];
+  // Sanftere Sprache: kein "anderer Stil" (klingt wertend), stattdessen
+  // "passt gerade weniger" — bleibt Empfehlung, kein Verbot.
   const label = tone === "high"
-    ? "passt zum Vibe"
+    ? "passt sehr gut zum aktuellen Vibe"
     : tone === "mid"
     ? "passt teilweise"
-    : "anderer Stil";
+    : "passt gerade weniger";
   return (
     <div className={`rounded-xl border ${palette} px-3 py-2 flex items-center justify-between gap-3 text-xs`}>
       <span className="font-medium">🎚 Vibe-Match</span>
