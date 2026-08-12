@@ -123,30 +123,48 @@ export default function SongRequestForm({ eventId, preMode = false, djDisplayNam
     const sessionId = getGuestSessionId();
     const supabase = createClient();
 
-    // Cooldown-Check: 5 Min zwischen Wuenschen pro Gast & Event.
-    // Verhindert Spam und sorgt fuer gleichmaessigen Flow uebers Event.
-    const COOLDOWN_MIN = 5;
-    const cutoffIso = new Date(Date.now() - COOLDOWN_MIN * 60_000).toISOString();
-    const { data: recent } = await supabase
-      .from("song_requests")
-      .select("created_at")
-      .eq("event_id", eventId)
-      .eq("requester_session_id", sessionId)
-      .gte("created_at", cutoffIso)
-      .order("created_at", { ascending: false })
-      .limit(1);
-    if (recent && recent.length > 0) {
-      const lastMs = new Date(recent[0].created_at).getTime();
-      const remainingMs = COOLDOWN_MIN * 60_000 - (Date.now() - lastMs);
-      const remainingSec = Math.max(1, Math.ceil(remainingMs / 1000));
-      const min = Math.floor(remainingSec / 60);
-      const sec = remainingSec % 60;
-      const stamp = `${min}:${sec.toString().padStart(2, "0")}`;
-      setError(
-        `Du hast gerade erst einen Wunsch geschickt. Bitte warte noch ${stamp} Min — damit jeder mal drankommt. 🎶`
-      );
-      setLoading(false);
-      return;
+    if (preMode) {
+      // Vorab-Modus: max. 3 Wuensche pro Gast (erkannt am Browser), damit die
+      // Sammlung nicht ausufert. Keine Zeitsperre — alle 3 duerfen am Stueck rein.
+      const PRE_MAX = 3;
+      const { count } = await supabase
+        .from("song_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("event_id", eventId)
+        .eq("requester_session_id", sessionId);
+      if ((count ?? 0) >= PRE_MAX) {
+        setError(
+          "Du hast schon 3 Songs gewünscht — mehr als genug für einen guten Eindruck! 🎶"
+        );
+        setLoading(false);
+        return;
+      }
+    } else {
+      // Live-Modus: 5 Min zwischen Wuenschen pro Gast & Event.
+      // Verhindert Spam und sorgt fuer gleichmaessigen Flow uebers Event.
+      const COOLDOWN_MIN = 5;
+      const cutoffIso = new Date(Date.now() - COOLDOWN_MIN * 60_000).toISOString();
+      const { data: recent } = await supabase
+        .from("song_requests")
+        .select("created_at")
+        .eq("event_id", eventId)
+        .eq("requester_session_id", sessionId)
+        .gte("created_at", cutoffIso)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (recent && recent.length > 0) {
+        const lastMs = new Date(recent[0].created_at).getTime();
+        const remainingMs = COOLDOWN_MIN * 60_000 - (Date.now() - lastMs);
+        const remainingSec = Math.max(1, Math.ceil(remainingMs / 1000));
+        const min = Math.floor(remainingSec / 60);
+        const sec = remainingSec % 60;
+        const stamp = `${min}:${sec.toString().padStart(2, "0")}`;
+        setError(
+          `Du hast gerade erst einen Wunsch geschickt. Bitte warte noch ${stamp} Min — damit jeder mal drankommt. 🎶`
+        );
+        setLoading(false);
+        return;
+      }
     }
 
     const baseRow = {
