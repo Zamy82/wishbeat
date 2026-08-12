@@ -10,9 +10,12 @@ import { matchPercent, matchTone } from "@/lib/vibe-match";
 
 interface Props {
   eventId: string;
-  // Im Vorab-Modus aus: vor der Party gibt es keine laufende Musik,
-  // gegen die ein Vibe-Match sinnvoll waere.
-  showVibeMatch?: boolean;
+  // Vorab-Modus (vor der Party): kein Vibe-Match (keine laufende Musik dagegen),
+  // keine Push-Benachrichtigung ("dein Song laeuft" gibt es noch nicht) und eine
+  // eigene Bestaetigung statt der Push-Box.
+  preMode?: boolean;
+  // Nur fuer die Vorab-Bestaetigung ("<Name> hat deinen Wunsch bekommen …").
+  djDisplayName?: string;
 }
 
 function useDebounce<T extends (...args: Parameters<T>) => void>(fn: T, ms: number) {
@@ -26,7 +29,7 @@ function useDebounce<T extends (...args: Parameters<T>) => void>(fn: T, ms: numb
   );
 }
 
-export default function SongRequestForm({ eventId, showVibeMatch = true }: Props) {
+export default function SongRequestForm({ eventId, preMode = false, djDisplayName }: Props) {
   const [query, setQuery] = useState("");
   const [tracks, setTracks] = useState<SpotifyTrack[]>([]);
   const [selected, setSelected] = useState<SpotifyTrack | null>(null);
@@ -60,7 +63,7 @@ export default function SongRequestForm({ eventId, showVibeMatch = true }: Props
 
   // Vibe einmal beim Mount laden + alle 30s aktualisieren
   useEffect(() => {
-    if (!showVibeMatch) return;
+    if (preMode) return;
     let cancelled = false;
     async function loadVibe() {
       try {
@@ -77,7 +80,7 @@ export default function SongRequestForm({ eventId, showVibeMatch = true }: Props
     loadVibe();
     const id = setInterval(loadVibe, 30000);
     return () => { cancelled = true; clearInterval(id); };
-  }, [eventId, showVibeMatch]);
+  }, [eventId, preMode]);
 
   // Wenn Track ausgewaehlt: Genres holen — Artist direkt mitgeben,
   // damit der Server nicht erst Spotify nach dem Artist fragen muss.
@@ -201,21 +204,25 @@ export default function SongRequestForm({ eventId, showVibeMatch = true }: Props
 
     setSubmitted(true);
 
-    // Service Worker + Push-Subscription anlegen — Ergebnis sichtbar machen.
-    subscribeForEvent({ eventId, sessionId })
-      .then((r) => {
-        if (r.ok) setPushStatus({ ok: true });
-        else setPushStatus({ ok: false, reason: r.reason ?? "unknown" });
-      })
-      .catch(() => setPushStatus({ ok: false, reason: "exception" }));
+    // Im Vorab-Modus keine Push-Mechanik: "dein Song laeuft" gibt es noch nicht,
+    // und der DJ soll nicht wochenlang pro Vorab-Wunsch gepingt werden.
+    if (!preMode) {
+      // Service Worker + Push-Subscription anlegen — Ergebnis sichtbar machen.
+      subscribeForEvent({ eventId, sessionId })
+        .then((r) => {
+          if (r.ok) setPushStatus({ ok: true });
+          else setPushStatus({ ok: false, reason: r.reason ?? "unknown" });
+        })
+        .catch(() => setPushStatus({ ok: false, reason: "exception" }));
 
-    // Push-Notification an den DJ schicken (fire-and-forget)
-    if (inserted?.id) {
-      fetch("/api/push/notify-wish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ request_id: inserted.id })
-      }).catch(() => {});
+      // Push-Notification an den DJ schicken (fire-and-forget)
+      if (inserted?.id) {
+        fetch("/api/push/notify-wish", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ request_id: inserted.id })
+        }).catch(() => {});
+      }
     }
   }
 
@@ -232,8 +239,16 @@ export default function SongRequestForm({ eventId, showVibeMatch = true }: Props
           </p>
         )}
 
-        {/* Push-Status: zeigt klar ob Browser-Push aktiv ist */}
-        <PushStatusBox status={pushStatus} isIosNoPwa={isIosNoPwa} />
+        {/* Vorab-Modus: schlichte Danke-Bestaetigung statt Push-Box.
+            Live-Betrieb: Push-Status wie gehabt. */}
+        {preMode ? (
+          <div className="rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-sm text-white/70">
+            🎶 {djDisplayName?.trim() || "Der DJ"} hat deinen Wunsch bekommen und in
+            seine Liste eingepflegt. Vielen Dank dafür!
+          </div>
+        ) : (
+          <PushStatusBox status={pushStatus} isIosNoPwa={isIosNoPwa} />
+        )}
 
         <button
           onClick={() => {
@@ -359,7 +374,7 @@ export default function SongRequestForm({ eventId, showVibeMatch = true }: Props
           </div>
 
           {/* Vibe-Match-Gimmick */}
-          {showVibeMatch && vibeLoaded && (
+          {!preMode && vibeLoaded && (
             <VibeMatchBadge
               loading={selectedGenres === null}
               percent={match?.percent ?? null}

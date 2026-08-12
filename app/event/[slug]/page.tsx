@@ -91,8 +91,8 @@ export default async function EventPage({ params }: Props) {
         </div>
       ) : preMode ? (
         /* Vorab-Modus: nur die Wunsch-Eingabe, ohne Live-Queue/Voting.
-           Vibe-Match aus — vor der Party laeuft keine Musik dagegen. */
-        <SongRequestForm eventId={event.id} showVibeMatch={false} />
+           preMode schaltet Vibe-Match + Push aus und zeigt die Vorab-Bestaetigung. */
+        <SongRequestForm eventId={event.id} preMode djDisplayName={djDisplayName} />
       ) : (
         <>
           {/* Live-Queue mit Suche direkt darin — Reihenfolge:
