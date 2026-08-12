@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 interface PlayItem {
   spotify_track_id: string;
@@ -20,11 +21,55 @@ interface Props {
 // Stattdessen: schoener Setlist-Text mit Spotify-Links zum Teilen via WhatsApp.
 
 export default function MemoryPlaylistButton({
+  eventId,
   eventName,
   eventDate,
-  plays
+  plays: initialPlays
 }: Props) {
   const [copied, setCopied] = useState(false);
+  const [plays, setPlays] = useState<PlayItem[]>(initialPlays);
+
+  // Live-Update der Play-History — ohne Seiten-Reload, analog StatsPanel.
+  // Realtime-Abo + 8s-Poll-Fallback, damit die Setlist waehrend der Party
+  // mitwaechst statt beim Stand vom Seitenaufruf haengen zu bleiben.
+  useEffect(() => {
+    const supabase = createClient();
+
+    async function refetch() {
+      const { data } = await supabase
+        .from("event_plays")
+        .select("spotify_track_id, title, artist")
+        .eq("event_id", eventId)
+        .order("played_at", { ascending: true });
+      if (data) setPlays(data as PlayItem[]);
+    }
+
+    refetch();
+
+    const pollId = setInterval(() => {
+      if (document.visibilityState === "visible") refetch();
+    }, 8000);
+
+    const channelName = `setlist-${eventId}-${Math.random().toString(36).slice(2, 9)}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "event_plays",
+          filter: `event_id=eq.${eventId}`
+        },
+        () => refetch()
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(pollId);
+      supabase.removeChannel(channel);
+    };
+  }, [eventId]);
 
   // Duplikate entfernen, Reihenfolge beibehalten
   const unique: PlayItem[] = (() => {
