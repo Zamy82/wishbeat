@@ -16,6 +16,11 @@
 - [x] Alle Env-Vars in Vercel hinterlegt
 - [x] App ist LIVE: https://wishbeat-zamy82-s-projects.vercel.app
 
+## Features (laufend)
+- [x] Vorab-Modus (wish_only) — QR vor der Party verschicken, Gäste sammeln nur
+      Wünsche (kein Live/Trinkgeld/Bewertung). Toggle im Event-Anlegen + auf der
+      Event-Seite. Migration: db-migrations/add-wish-only-mode.sql
+
 ## Phase 1 — MVP Gäste-Wunschsong-App
 
 ### Datenbank (Supabase)

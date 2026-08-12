@@ -21,6 +21,7 @@ export default function NewEventPage() {
   const [name, setName] = useState("");
   const [tagline, setTagline] = useState("");
   const [date, setDate] = useState("");
+  const [wishOnly, setWishOnly] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,7 +48,8 @@ export default function NewEventPage() {
         tagline: tagline.trim() || null,
         event_date: date,
         slug,
-        is_active: true
+        is_active: true,
+        wish_only: wishOnly
       })
       .select("id")
       .single();
@@ -116,6 +118,25 @@ export default function NewEventPage() {
               className="w-full rounded-2xl bg-white/10 border border-white/20 px-5 py-4 text-white focus:outline-none focus:border-neon-purple transition [color-scheme:dark]"
             />
           </div>
+
+          <label className="flex items-start gap-3 rounded-2xl bg-white/5 border border-white/15 px-5 py-4 cursor-pointer hover:bg-white/10 transition">
+            <input
+              type="checkbox"
+              checked={wishOnly}
+              onChange={(e) => setWishOnly(e.target.checked)}
+              className="mt-1 h-5 w-5 shrink-0 accent-neon-purple"
+            />
+            <span className="text-sm">
+              <span className="block text-white font-medium">
+                Vorab-Modus (nur Wünsche sammeln)
+              </span>
+              <span className="block text-white/50 text-xs mt-0.5">
+                Für den QR-Code vor der Party: Gäste sehen nur die Wunsch-Eingabe,
+                keine Live-Anzeige oder Trinkgeld. Am Party-Tag im Event einfach
+                ausschalten.
+              </span>
+            </span>
+          </label>
 
           {name && date && (
             <p className="text-white/30 text-xs">

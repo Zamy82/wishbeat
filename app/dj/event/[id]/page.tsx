@@ -74,15 +74,22 @@ export default async function DjEventPage({ params }: Props) {
                 year: "numeric"
               })}
             </p>
-            <span
-              className={`inline-block mt-2 text-xs px-2.5 py-1 rounded-full font-medium ${
-                event.is_active
-                  ? "bg-neon-cyan/20 text-neon-cyan"
-                  : "bg-white/10 text-white/40"
-              }`}
-            >
-              {event.is_active ? "Aktiv — nimmt Wünsche an" : "Beendet"}
-            </span>
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              <span
+                className={`inline-block text-xs px-2.5 py-1 rounded-full font-medium ${
+                  event.is_active
+                    ? "bg-neon-cyan/20 text-neon-cyan"
+                    : "bg-white/10 text-white/40"
+                }`}
+              >
+                {event.is_active ? "Aktiv — nimmt Wünsche an" : "Beendet"}
+              </span>
+              {event.is_active && event.wish_only && (
+                <span className="inline-block text-xs px-2.5 py-1 rounded-full font-medium bg-neon-pink/20 text-neon-pink">
+                  Vorab-Modus — nur Wünsche
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-col items-center gap-2">
@@ -114,7 +121,11 @@ export default async function DjEventPage({ params }: Props) {
         </div>
 
         <div className="flex items-center gap-3 mt-4 flex-wrap">
-          <EventControls eventId={id} isActive={event.is_active} />
+          <EventControls
+            eventId={id}
+            isActive={event.is_active}
+            wishOnly={event.wish_only}
+          />
           <Link
             href="/dj/assistant"
             className="px-4 py-2 rounded-full border border-white/20 text-white/80 hover:text-white hover:border-white/40 text-sm transition"
