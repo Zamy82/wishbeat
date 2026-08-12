@@ -13,6 +13,7 @@ import DedupePlaysButton from "./DedupePlaysButton";
 import CrowdPulse from "./CrowdPulse";
 import TopBoosts from "./TopBoosts";
 import MemoryPlaylistButton from "./MemoryPlaylistButton";
+import ReviewRequestButton from "./ReviewRequestButton";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -191,6 +192,7 @@ export default async function DjEventPage({ params }: Props) {
           </span>
         </h2>
         <RatingsPanel eventId={id} initialRatings={ratings ?? []} />
+        <ReviewRequestButton eventName={event.name} eventUrl={eventUrl} />
       </section>
     </main>
   );
