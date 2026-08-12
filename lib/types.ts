@@ -8,6 +8,7 @@ export interface DjEvent {
   event_date: string;
   slug: string;
   is_active: boolean;
+  wish_only: boolean;
   tagline: string | null;
   created_at: string;
 }
