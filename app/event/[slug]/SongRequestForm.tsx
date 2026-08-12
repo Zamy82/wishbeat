@@ -10,6 +10,9 @@ import { matchPercent, matchTone } from "@/lib/vibe-match";
 
 interface Props {
   eventId: string;
+  // Im Vorab-Modus aus: vor der Party gibt es keine laufende Musik,
+  // gegen die ein Vibe-Match sinnvoll waere.
+  showVibeMatch?: boolean;
 }
 
 function useDebounce<T extends (...args: Parameters<T>) => void>(fn: T, ms: number) {
@@ -23,7 +26,7 @@ function useDebounce<T extends (...args: Parameters<T>) => void>(fn: T, ms: numb
   );
 }
 
-export default function SongRequestForm({ eventId }: Props) {
+export default function SongRequestForm({ eventId, showVibeMatch = true }: Props) {
   const [query, setQuery] = useState("");
   const [tracks, setTracks] = useState<SpotifyTrack[]>([]);
   const [selected, setSelected] = useState<SpotifyTrack | null>(null);
@@ -57,6 +60,7 @@ export default function SongRequestForm({ eventId }: Props) {
 
   // Vibe einmal beim Mount laden + alle 30s aktualisieren
   useEffect(() => {
+    if (!showVibeMatch) return;
     let cancelled = false;
     async function loadVibe() {
       try {
@@ -73,7 +77,7 @@ export default function SongRequestForm({ eventId }: Props) {
     loadVibe();
     const id = setInterval(loadVibe, 30000);
     return () => { cancelled = true; clearInterval(id); };
-  }, [eventId]);
+  }, [eventId, showVibeMatch]);
 
   // Wenn Track ausgewaehlt: Genres holen — Artist direkt mitgeben,
   // damit der Server nicht erst Spotify nach dem Artist fragen muss.
@@ -355,7 +359,7 @@ export default function SongRequestForm({ eventId }: Props) {
           </div>
 
           {/* Vibe-Match-Gimmick */}
-          {vibeLoaded && (
+          {showVibeMatch && vibeLoaded && (
             <VibeMatchBadge
               loading={selectedGenres === null}
               percent={match?.percent ?? null}
