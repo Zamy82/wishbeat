@@ -19,7 +19,7 @@ export default async function EventPage({ params }: Props) {
 
   const { data: event } = await supabase
     .from("events")
-    .select("id, name, tagline, event_date, is_active, owner_id")
+    .select("id, name, tagline, event_date, is_active, wish_only, owner_id")
     .eq("slug", slug)
     .single();
 
@@ -46,6 +46,10 @@ export default async function EventPage({ params }: Props) {
     djProfile?.iban_holder?.trim() ||
     "den DJ";
 
+  // Vorab-Modus: Event sammelt schon vor der Party Wuensche.
+  // Nur Wunsch-Eingabe zeigen — keine Live-Queue, Bewertung oder Trinkgeld.
+  const preMode = !!(event.is_active && event.wish_only);
+
   return (
     <main className="min-h-screen flex flex-col items-center px-4 py-10">
       <LastEventTracker slug={slug} name={event.name} />
@@ -70,7 +74,25 @@ export default async function EventPage({ params }: Props) {
         )}
       </header>
 
-      {event.is_active ? (
+      {preMode && (
+        <p className="max-w-md text-center text-white/70 mb-8 leading-relaxed">
+          Ich sammle eure Wünsche schon vorab und webe so viele wie möglich in den
+          Abend ein. Einen einzelnen Song versprechen kann ich nicht — aber je öfter
+          etwas gewünscht wird, desto sicherer läuft&rsquo;s. Doppelte Wünsche sind
+          völlig okay.
+        </p>
+      )}
+
+      {!event.is_active ? (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center max-w-sm">
+          <p className="text-white/60">
+            Wunschsongs werden nicht mehr angenommen. Danke fürs Mitmachen!
+          </p>
+        </div>
+      ) : preMode ? (
+        /* Vorab-Modus: nur die Wunsch-Eingabe, ohne Live-Queue/Voting. */
+        <SongRequestForm eventId={event.id} />
+      ) : (
         <>
           {/* Live-Queue mit Suche direkt darin — Reihenfolge:
               Jetzt läuft → Suche → Geplant. So kommt der Gast in
@@ -82,16 +104,11 @@ export default async function EventPage({ params }: Props) {
             <WishesVotingList eventId={event.id} />
           </div>
         </>
-      ) : (
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center max-w-sm">
-          <p className="text-white/60">
-            Wunschsongs werden nicht mehr angenommen. Danke fürs Mitmachen!
-          </p>
-        </div>
       )}
 
-      {/* Bewertung — auch bei beendeten Events erlaubt (Feedback nachträglich) */}
-      <RatingSection eventId={event.id} eventName={event.name} />
+      {/* Bewertung — auch bei beendeten Events erlaubt, aber nicht im Vorab-Modus
+          (da hat noch nichts stattgefunden, das man bewerten koennte). */}
+      {!preMode && <RatingSection eventId={event.id} eventName={event.name} />}
 
       {/* Oeffentliche Bewertungen aus anderen Events fuer denselben DJ */}
       <PublicDjReviews
@@ -107,8 +124,9 @@ export default async function EventPage({ params }: Props) {
         referrerEventId={event.id}
       />
 
-      {/* Trinkgeld — wenn DJ IBAN oder PayPal eingetragen hat */}
-      {canTip && djProfile && (
+      {/* Trinkgeld — wenn DJ IBAN oder PayPal eingetragen hat.
+          Im Vorab-Modus ausgeblendet (waere vor der Party deplatziert). */}
+      {!preMode && canTip && djProfile && (
         <TipSection
           djDisplayName={djDisplayName}
           ibanHolder={djProfile.iban_holder ?? ""}
