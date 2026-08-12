@@ -77,9 +77,10 @@ export default async function EventPage({ params }: Props) {
       {preMode && (
         <p className="max-w-md text-center text-white/70 mb-8 leading-relaxed">
           Ich sammle eure Wünsche schon vorab und webe so viele wie möglich in den
-          Abend ein. Einen einzelnen Song versprechen kann ich nicht — aber je öfter
-          etwas gewünscht wird, desto sicherer läuft&rsquo;s. Doppelte Wünsche sind
-          völlig okay.
+          Abend ein. Jeder darf sich bis zu drei Songs wünschen — so bleibt die Liste
+          bunt und für alle ist was dabei. Einen einzelnen Song versprechen kann ich
+          nicht, aber je öfter etwas gewünscht wird, desto sicherer läuft&rsquo;s.
+          Doppelte Wünsche sind völlig okay.
         </p>
       )}
 
