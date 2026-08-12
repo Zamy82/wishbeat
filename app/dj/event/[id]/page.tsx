@@ -5,6 +5,7 @@ import QRCodeDisplay from "@/components/QRCodeDisplay";
 import LiveQueue from "./LiveQueue";
 import EventControls from "./EventControls";
 import TaglineEditor from "./TaglineEditor";
+import TitleEditor from "./TitleEditor";
 import RatingsPanel from "./RatingsPanel";
 import StatsPanel from "./StatsPanel";
 import DjPushOptIn from "./DjPushOptIn";
@@ -66,7 +67,7 @@ export default async function DjEventPage({ params }: Props) {
         </Link>
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
           <div>
-            <h1 className="text-3xl font-bold text-white">{event.name}</h1>
+            <TitleEditor eventId={id} initialName={event.name} />
             <TaglineEditor eventId={id} initialTagline={event.tagline} />
             <p className="text-white/40 text-sm mt-1">
               {new Date(event.event_date).toLocaleDateString("de-DE", {
