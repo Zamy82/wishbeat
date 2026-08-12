@@ -18,7 +18,7 @@ export default function ReviewRequestButton({ eventName, eventUrl }: Props) {
     `🎉 ${eventName} war ein Fest — danke nochmal, dass ich dabei sein durfte!\n` +
     `Eine kleine Bitte: Magst du an die Gäste weiterleiten, dass sie den Abend kurz ` +
     `bewerten können? Das hilft mir riesig. Hier ein fertiger Text zum Weiterleiten 👇\n\n` +
-    `⭐ Hat euch die Musik gefallen? Bewertet den Abend von ${eventName} in 10 Sekunden ` +
+    `⭐ Hat euch die Musik gefallen? Bewertet den Abend bei ${eventName} in 10 Sekunden ` +
     `— kein Konto nötig:\n` +
     `👉 ${eventUrl}\n\n` +
     `Danke dir! — Zamy`;
