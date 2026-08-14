@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import Image from "next/image";
-import { createClient } from "@/lib/supabase/client";
 import type { SpotifyTrack } from "@/lib/types";
 import { getGuestSessionId } from "@/lib/guest-session";
 import { subscribeForEvent } from "@/lib/push-client";
@@ -121,105 +120,38 @@ export default function SongRequestForm({ eventId, preMode = false, djDisplayNam
     setError(null);
 
     const sessionId = getGuestSessionId();
-    const supabase = createClient();
 
-    if (preMode) {
-      // Vorab-Modus: max. 3 Wuensche pro Gast (erkannt am Browser), damit die
-      // Sammlung nicht ausufert. Keine Zeitsperre — alle 3 duerfen am Stueck rein.
-      const PRE_MAX = 3;
-      const { count } = await supabase
-        .from("song_requests")
-        .select("id", { count: "exact", head: true })
-        .eq("event_id", eventId)
-        .eq("requester_session_id", sessionId);
-      if ((count ?? 0) >= PRE_MAX) {
-        setError(
-          "Du hast schon 3 Songs gewünscht — mehr als genug für einen guten Eindruck! 🎶"
-        );
+    // Wunsch serverseitig einreichen — der Server erzwingt Cooldown/Limit,
+    // status='pending' und Laengen (nicht mehr vom Browser manipulierbar).
+    let insertedId: string | undefined;
+    try {
+      const res = await fetch(`/api/events/${eventId}/wish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          spotify_track_id: selected.id,
+          title: selected.title,
+          artist: selected.artist,
+          cover_url: selected.cover_url,
+          guest_nickname: nickname.trim() || null,
+          requester_session_id: sessionId,
+          artist_genres: selectedGenres ?? null
+        })
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        setError(data.message ?? "Konnte deinen Wunsch nicht speichern.");
         setLoading(false);
         return;
       }
-    } else {
-      // Live-Modus: 5 Min zwischen Wuenschen pro Gast & Event.
-      // Verhindert Spam und sorgt fuer gleichmaessigen Flow uebers Event.
-      const COOLDOWN_MIN = 5;
-      const cutoffIso = new Date(Date.now() - COOLDOWN_MIN * 60_000).toISOString();
-      const { data: recent } = await supabase
-        .from("song_requests")
-        .select("created_at")
-        .eq("event_id", eventId)
-        .eq("requester_session_id", sessionId)
-        .gte("created_at", cutoffIso)
-        .order("created_at", { ascending: false })
-        .limit(1);
-      if (recent && recent.length > 0) {
-        const lastMs = new Date(recent[0].created_at).getTime();
-        const remainingMs = COOLDOWN_MIN * 60_000 - (Date.now() - lastMs);
-        const remainingSec = Math.max(1, Math.ceil(remainingMs / 1000));
-        const min = Math.floor(remainingSec / 60);
-        const sec = remainingSec % 60;
-        const stamp = `${min}:${sec.toString().padStart(2, "0")}`;
-        setError(
-          `Du hast gerade erst einen Wunsch geschickt. Bitte warte noch ${stamp} Min — damit jeder mal drankommt. 🎶`
-        );
-        setLoading(false);
-        return;
-      }
-    }
-
-    const baseRow = {
-      event_id: eventId,
-      spotify_track_id: selected.id,
-      title: selected.title,
-      artist: selected.artist,
-      cover_url: selected.cover_url,
-      guest_nickname: nickname.trim() || null,
-      requester_session_id: sessionId,
-      status: "pending" as const
-    };
-
-    // Erst mit artist_genres versuchen — wenn die Spalte (noch) nicht
-    // existiert oder Schema-Cache veraltet ist, ohne Genres erneut versuchen.
-    let inserted: { id: string } | null = null;
-    let dbError: { message?: string; code?: string } | null = null;
-    {
-      const res = await supabase
-        .from("song_requests")
-        .insert({ ...baseRow, artist_genres: selectedGenres ?? null })
-        .select("id")
-        .single();
-      inserted = res.data;
-      dbError = res.error;
-    }
-
-    if (dbError) {
-      const msg = (dbError.message ?? "").toLowerCase();
-      const isGenresColumnIssue =
-        msg.includes("artist_genres") ||
-        msg.includes("schema cache") ||
-        dbError.code === "PGRST204";
-      if (isGenresColumnIssue) {
-        console.warn("Retry without artist_genres:", dbError);
-        const res = await supabase
-          .from("song_requests")
-          .insert(baseRow)
-          .select("id")
-          .single();
-        inserted = res.data;
-        dbError = res.error;
-      }
-    }
-
-    setLoading(false);
-
-    if (dbError) {
-      console.error("Song request insert failed:", dbError);
-      setError(
-        `Konnte deinen Wunsch nicht speichern (${dbError.message ?? "unbekannter Fehler"}).`
-      );
+      insertedId = data.id as string | undefined;
+    } catch {
+      setError("Netzwerk-Fehler. Bitte nochmal versuchen.");
+      setLoading(false);
       return;
     }
 
+    setLoading(false);
     setSubmitted(true);
 
     // Im Vorab-Modus keine Push-Mechanik: "dein Song laeuft" gibt es noch nicht,
@@ -234,11 +166,11 @@ export default function SongRequestForm({ eventId, preMode = false, djDisplayNam
         .catch(() => setPushStatus({ ok: false, reason: "exception" }));
 
       // Push-Notification an den DJ schicken (fire-and-forget)
-      if (inserted?.id) {
+      if (insertedId) {
         fetch("/api/push/notify-wish", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ request_id: inserted.id })
+          body: JSON.stringify({ request_id: insertedId })
         }).catch(() => {});
       }
     }
