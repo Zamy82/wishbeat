@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { notFound } from "next/navigation";
 import SongRequestForm from "./SongRequestForm";
 import TipSection from "./TipSection";
@@ -25,8 +26,12 @@ export default async function EventPage({ params }: Props) {
 
   if (!event) notFound();
 
-  // DJ-Profil laden (für Trinkgeld) — RLS-Policy erlaubt das für aktive Events
-  const { data: djProfile } = await supabase
+  // DJ-Profil serverseitig mit Service-Role lesen — nur fuer dieses Event.
+  // Bewusst NICHT ueber den Anon-Client: sonst waeren iban/iban_holder/bic ueber
+  // den oeffentlichen Anon-Key fuer alle DJs auslesbar. Diese Server-Komponente
+  // laeuft serverseitig, der Service-Role-Key erreicht den Browser nie.
+  const admin = createAdminClient();
+  const { data: djProfile } = await admin
     .from("dj_profiles")
     .select("display_name, iban_holder, iban, bic, paypal_handle")
     .eq("user_id", event.owner_id)
