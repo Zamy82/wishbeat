@@ -37,14 +37,9 @@ export default async function EventPage({ params }: Props) {
     .eq("user_id", event.owner_id)
     .maybeSingle();
 
-  const hasBank = !!(
-    djProfile?.iban &&
-    djProfile?.iban_holder &&
-    djProfile.iban.length > 0 &&
-    djProfile.iban_holder.length > 0
-  );
+  // Trinkgeld laeuft nur ueber PayPal (keine Bankdaten mehr).
   const hasPaypal = !!(djProfile?.paypal_handle && djProfile.paypal_handle.length > 0);
-  const canTip = hasBank || hasPaypal;
+  const canTip = hasPaypal;
 
   const djDisplayName =
     djProfile?.display_name?.trim() ||
@@ -136,13 +131,7 @@ export default async function EventPage({ params }: Props) {
       {!preMode && canTip && djProfile && (
         <TipSection
           djDisplayName={djDisplayName}
-          ibanHolder={djProfile.iban_holder ?? ""}
-          iban={djProfile.iban ?? ""}
-          bic={djProfile.bic}
           paypalHandle={djProfile.paypal_handle}
-          eventName={event.name}
-          hasBank={hasBank}
-          hasPaypal={hasPaypal}
         />
       )}
     </main>

@@ -1,63 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import QRCode from "qrcode";
-import { buildGiroCodeData, formatIban } from "@/lib/girocode";
+import { useState } from "react";
 
 interface Props {
   djDisplayName: string;
-  ibanHolder: string;
-  iban: string;
-  bic: string | null;
   paypalHandle: string | null;
-  eventName: string;
-  hasBank: boolean;
-  hasPaypal: boolean;
 }
 
 const PRESET_AMOUNTS = [5, 10, 20];
 
-type Method = "bank" | "paypal";
-
-export default function TipSection({
-  djDisplayName,
-  ibanHolder,
-  iban,
-  bic,
-  paypalHandle,
-  hasBank,
-  hasPaypal
-}: Props) {
+export default function TipSection({ djDisplayName, paypalHandle }: Props) {
   const [amount, setAmount] = useState<number | null>(5);
   const [customAmount, setCustomAmount] = useState("");
-  const [method, setMethod] = useState<Method>(hasPaypal ? "paypal" : "bank");
-  const [showFull, setShowFull] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const effectiveAmount =
     amount !== null ? amount : parseFloat(customAmount.replace(",", ".")) || 0;
-
-  // Vornamen aus iban_holder für sauberen Verwendungszweck
-  const firstName = ibanHolder.trim().split(/\s+/)[0] || djDisplayName;
-  const purpose = `Geschenk an ${firstName}`;
-
-  // SEPA QR-Code generieren — nur wenn Bank-Tab aktiv und Daten da
-  useEffect(() => {
-    if (method !== "bank" || !canvasRef.current || !iban || !ibanHolder) return;
-    const data = buildGiroCodeData({
-      name: ibanHolder,
-      iban,
-      bic: bic ?? undefined,
-      amount: effectiveAmount > 0 ? effectiveAmount : undefined,
-      purpose
-    });
-    QRCode.toCanvas(canvasRef.current, data, {
-      width: 280,
-      margin: 1,
-      color: { dark: "#0a0a12", light: "#ffffff" },
-      errorCorrectionLevel: "M"
-    });
-  }, [method, ibanHolder, iban, bic, effectiveAmount, purpose]);
 
   // PayPal.me-URL bauen — Format: paypal.me/USER/BETRAGEUR
   const paypalUrl = paypalHandle
@@ -65,6 +22,9 @@ export default function TipSection({
       ? `https://paypal.me/${paypalHandle}/${effectiveAmount.toFixed(2)}EUR`
       : `https://paypal.me/${paypalHandle}`
     : "";
+
+  // Ohne PayPal-Handle keine Trinkgeld-Sektion (Trinkgeld laeuft nur ueber PayPal)
+  if (!paypalHandle) return null;
 
   return (
     <section className="w-full max-w-md mt-12 mb-4">
@@ -78,37 +38,6 @@ export default function TipSection({
             Betrag — komplett auf privater Schenk-Basis.
           </p>
         </div>
-
-        {/* Methoden-Tabs — nur zeigen wenn beide verfügbar */}
-        {hasBank && hasPaypal && (
-          <div className="grid grid-cols-2 gap-2 mb-5 p-1 rounded-2xl bg-white/5 border border-white/10">
-            <button
-              type="button"
-              onClick={() => setMethod("paypal")}
-              className={`py-2.5 rounded-xl font-semibold text-sm transition ${
-                method === "paypal"
-                  ? "bg-[#0070ba]/30 text-white shadow-lg"
-                  : "text-white/50 hover:text-white/80"
-              }`}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <PayPalLogo />
-                PayPal
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setMethod("bank")}
-              className={`py-2.5 rounded-xl font-semibold text-sm transition ${
-                method === "bank"
-                  ? "bg-white/15 text-white shadow-lg"
-                  : "text-white/50 hover:text-white/80"
-              }`}
-            >
-              🏦 Bank-Überweisung
-            </button>
-          </div>
-        )}
 
         {/* Betrag-Auswahl */}
         <div className="grid grid-cols-4 gap-2 mb-5">
@@ -157,91 +86,37 @@ export default function TipSection({
           </div>
         )}
 
-        {/* Bank-Methode */}
-        {method === "bank" && hasBank && (
-          <div className="flex flex-col items-center">
-            <div className="rounded-2xl bg-white p-3 shadow-lg">
-              <canvas ref={canvasRef} />
-            </div>
-            <p className="text-white/60 text-sm mt-3 text-center">
-              📱 Mit Banking-App scannen
-              {effectiveAmount > 0 && (
-                <>
-                  {" "}—{" "}
-                  <span className="text-white font-semibold">
-                    {effectiveAmount.toFixed(2)} €
-                  </span>{" "}
-                  als Geschenk an {firstName}
-                </>
-              )}
-            </p>
-            <p className="text-white/30 text-xs mt-1 text-center">
-              Sparkasse, Volksbank, ING, N26, DKB, comdirect & alle DE-Banken
-            </p>
-
-            {/* Manual-Daten ausklappen */}
-            <button
-              type="button"
-              onClick={() => setShowFull(!showFull)}
-              className="mt-4 w-full text-white/40 hover:text-white/70 text-xs underline underline-offset-2 transition"
-            >
-              {showFull ? "Daten ausblenden" : "Daten manuell anzeigen"}
-            </button>
-
-            {showFull && (
-              <dl className="mt-3 grid grid-cols-[80px_1fr] gap-y-1.5 gap-x-3 text-xs w-full">
-                <dt className="text-white/40">Empfänger</dt>
-                <dd className="text-white/80">{ibanHolder}</dd>
-                <dt className="text-white/40">IBAN</dt>
-                <dd className="text-white/80 font-mono break-all">
-                  {formatIban(iban)}
-                </dd>
-                {bic && (
-                  <>
-                    <dt className="text-white/40">BIC</dt>
-                    <dd className="text-white/80 font-mono">{bic}</dd>
-                  </>
-                )}
-                <dt className="text-white/40">Verw.zweck</dt>
-                <dd className="text-white/80">{purpose}</dd>
-              </dl>
+        {/* PayPal-Button */}
+        <div className="flex flex-col items-center">
+          <a
+            href={paypalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full py-4 rounded-2xl bg-[#0070ba] hover:bg-[#005ea6] text-white font-bold text-base flex items-center justify-center gap-2.5 transition shadow-lg active:scale-95"
+          >
+            <PayPalLogo big />
+            Mit PayPal senden
+            {effectiveAmount > 0 && (
+              <span className="font-extrabold">
+                · {effectiveAmount.toFixed(2)} €
+              </span>
             )}
-          </div>
-        )}
-
-        {/* PayPal-Methode */}
-        {method === "paypal" && hasPaypal && (
-          <div className="flex flex-col items-center">
-            <a
-              href={paypalUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full py-4 rounded-2xl bg-[#0070ba] hover:bg-[#005ea6] text-white font-bold text-base flex items-center justify-center gap-2.5 transition shadow-lg active:scale-95"
-            >
-              <PayPalLogo big />
-              Mit PayPal senden
-              {effectiveAmount > 0 && (
-                <span className="font-extrabold">
-                  · {effectiveAmount.toFixed(2)} €
-                </span>
-              )}
-            </a>
-            <p className="text-white/50 text-xs mt-3 text-center">
-              Öffnet <code className="text-white/70">paypal.me/{paypalHandle}</code>
-              {" "}in der PayPal-App
+          </a>
+          <p className="text-white/50 text-xs mt-3 text-center">
+            Öffnet <code className="text-white/70">paypal.me/{paypalHandle}</code>
+            {" "}in der PayPal-App
+          </p>
+          <div className="mt-3 rounded-xl bg-yellow-400/10 border border-yellow-400/30 p-3 text-xs">
+            <p className="text-yellow-300 font-semibold mb-1">
+              ⚠️ Wichtig im PayPal-Dialog:
             </p>
-            <div className="mt-3 rounded-xl bg-yellow-400/10 border border-yellow-400/30 p-3 text-xs">
-              <p className="text-yellow-300 font-semibold mb-1">
-                ⚠️ Wichtig im PayPal-Dialog:
-              </p>
-              <p className="text-white/80 leading-relaxed">
-                Wähle <strong>&bdquo;An Freunde oder Familie senden&ldquo;</strong>{" "}
-                (nicht „Für Waren/Dienstleistungen"). Sonst fallen 2,5% Gebühren
-                an — bei einer privaten Schenkung gibt&apos;s das nicht.
-              </p>
-            </div>
+            <p className="text-white/80 leading-relaxed">
+              Wähle <strong>&bdquo;An Freunde oder Familie senden&ldquo;</strong>{" "}
+              (nicht „Für Waren/Dienstleistungen"). Sonst fallen 2,5% Gebühren
+              an — bei einer privaten Schenkung gibt&apos;s das nicht.
+            </p>
           </div>
-        )}
+        </div>
       </div>
     </section>
   );
