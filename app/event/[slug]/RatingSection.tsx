@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { getGuestSessionId } from "@/lib/guest-session";
 
 interface Props {
   eventId: string;
@@ -38,22 +38,30 @@ export default function RatingSection({ eventId, eventName }: Props) {
     if (rating === 0) return;
     setSaving(true);
 
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("event_ratings")
-      .insert({
-        event_id: eventId,
-        rating,
-        comment: comment.trim() || null,
-        nickname: nickname.trim() || null
-      })
-      .select("id")
-      .single();
-
-    setSaving(false);
-
-    if (error) {
-      alert("Bewertung konnte nicht gespeichert werden. Versuch's nochmal.");
+    let ratingId: string | undefined;
+    try {
+      const res = await fetch(`/api/events/${eventId}/rating`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rating,
+          comment: comment.trim() || null,
+          nickname: nickname.trim() || null,
+          requester_session_id: getGuestSessionId()
+        })
+      });
+      const data = await res.json();
+      setSaving(false);
+      if (!data.ok) {
+        alert(
+          data.message ?? "Bewertung konnte nicht gespeichert werden. Versuch's nochmal."
+        );
+        return;
+      }
+      ratingId = data.id as string | undefined;
+    } catch {
+      setSaving(false);
+      alert("Netzwerk-Fehler. Bitte nochmal versuchen.");
       return;
     }
 
@@ -63,11 +71,11 @@ export default function RatingSection({ eventId, eventName }: Props) {
     setSubmitted(true);
 
     // DJ per Push benachrichtigen (fire-and-forget, fehlerfest)
-    if (data?.id) {
+    if (ratingId) {
       fetch("/api/push/notify-rating", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating_id: data.id })
+        body: JSON.stringify({ rating_id: ratingId })
       }).catch(() => {});
     }
   }
