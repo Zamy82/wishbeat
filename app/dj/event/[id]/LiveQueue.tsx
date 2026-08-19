@@ -59,6 +59,18 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
     at: number;
   } | null>(null);
 
+  // Laptop-Benachrichtigungen: Banner + Pling + optional Desktop-Meldung bei
+  // neuen Wuenschen. notifyOn steuert Pling/Desktop; das Banner kommt immer.
+  const [notifyOn, setNotifyOn] = useState(false);
+  const notifyOnRef = useRef(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  // Schon gemeldete Wunsch-IDs — verhindert Doppel-Pling bei Event-Replays.
+  const notifiedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    notifyOnRef.current = notifyOn;
+  }, [notifyOn]);
+
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 5000);
@@ -217,7 +229,11 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
         },
         (payload) => {
           if (payload.eventType === "INSERT") {
-            setRequests((prev) => [...prev, payload.new as SongRequest]);
+            const incoming = payload.new as SongRequest;
+            setRequests((prev) =>
+              prev.some((r) => r.id === incoming.id) ? prev : [...prev, incoming]
+            );
+            notifyNewWish(incoming);
           } else if (payload.eventType === "UPDATE") {
             setRequests((prev) =>
               prev.map((r) =>
@@ -269,6 +285,88 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [eventId, requests]);
+
+  // Kurzes zweistufiges "Pling" per Web Audio — kein Sound-File noetig.
+  function playPling() {
+    try {
+      const ctx = audioCtxRef.current;
+      if (!ctx) return;
+      if (ctx.state === "suspended") void ctx.resume();
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.setValueAtTime(1318.5, now + 0.09);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.22, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.4);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.42);
+    } catch {}
+  }
+
+  function notifyNewWish(req: SongRequest) {
+    if (notifiedRef.current.has(req.id)) return;
+    notifiedRef.current.add(req.id);
+    // Banner immer zeigen — kostet keine Browser-Berechtigung.
+    setToast({
+      kind: "ok",
+      text: `🎵 Neuer Wunsch: ${req.title} — ${req.artist}${
+        req.guest_nickname ? ` (von ${req.guest_nickname})` : ""
+      }`
+    });
+    // Pling + Desktop-Meldung nur wenn per Knopf aktiviert.
+    if (!notifyOnRef.current) return;
+    playPling();
+    if ("Notification" in window && Notification.permission === "granted") {
+      try {
+        new Notification("🎵 Neuer Wunsch", {
+          body: `${req.title} — ${req.artist}${
+            req.guest_nickname ? `\nvon ${req.guest_nickname}` : ""
+          }`,
+          icon: req.cover_url ?? undefined,
+          tag: req.id
+        });
+      } catch {}
+    }
+  }
+
+  async function toggleNotifications() {
+    if (notifyOn) {
+      setNotifyOn(false);
+      setToast({ kind: "ok", text: "🔕 Töne & Laptop-Meldungen aus." });
+      return;
+    }
+    try {
+      // AudioContext muss durch einen Klick "entsperrt" werden (Autoplay-Schutz).
+      if (!audioCtxRef.current) {
+        const Ctor =
+          window.AudioContext ??
+          (window as unknown as { webkitAudioContext: typeof AudioContext })
+            .webkitAudioContext;
+        audioCtxRef.current = new Ctor();
+      }
+      if (audioCtxRef.current.state === "suspended") {
+        await audioCtxRef.current.resume();
+      }
+      let perm: NotificationPermission = "default";
+      if ("Notification" in window) perm = await Notification.requestPermission();
+      setNotifyOn(true);
+      notifyOnRef.current = true;
+      playPling();
+      setToast({
+        kind: "ok",
+        text:
+          perm === "granted"
+            ? "🔔 An — Pling + Laptop-Meldung bei jedem neuen Wunsch."
+            : "🔔 Pling an. Laptop-Meldung hat der Browser blockiert — Banner + Pling laufen trotzdem."
+      });
+    } catch {
+      setToast({ kind: "err", text: "Konnte Töne nicht aktivieren." });
+    }
+  }
 
   async function trackCurrentSongNow() {
     try {
@@ -424,12 +522,25 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
                 : `Spotify-Status: ${nowPlayingDebug.reason ?? "unbekannt"}`
               : "Spotify-Abfrage läuft…"}
           </span>
-          <button
-            onClick={() => trackCurrentSongNow()}
-            className="px-3 py-1 rounded-full border border-neon-cyan/40 text-neon-cyan hover:bg-neon-cyan/10 text-[11px] font-medium transition"
-          >
-            Jetzt mitschreiben
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => toggleNotifications()}
+              className={`px-3 py-1 rounded-full border text-[11px] font-medium transition ${
+                notifyOn
+                  ? "border-neon-pink/50 text-neon-pink bg-neon-pink/10"
+                  : "border-white/20 text-white/60 hover:bg-white/10"
+              }`}
+              title="Bei jedem neuen Wunsch: Pling + Banner (und Laptop-Meldung, wenn der Browser sie erlaubt)"
+            >
+              {notifyOn ? "🔔 Meldungen an" : "🔕 Meldungen aktivieren"}
+            </button>
+            <button
+              onClick={() => trackCurrentSongNow()}
+              className="px-3 py-1 rounded-full border border-neon-cyan/40 text-neon-cyan hover:bg-neon-cyan/10 text-[11px] font-medium transition"
+            >
+              Jetzt mitschreiben
+            </button>
+          </div>
         </div>
       </div>
 
