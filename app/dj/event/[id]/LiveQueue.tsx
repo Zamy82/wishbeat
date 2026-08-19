@@ -71,6 +71,38 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
     notifyOnRef.current = notifyOn;
   }, [notifyOn]);
 
+  // Nach Reload: gespeicherten Schalter wiederherstellen. Desktop-Meldungen
+  // brauchen nur die (noch erteilte) Berechtigung — laufen also sofort wieder.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("wishbeat_notify_on") === "1";
+      const granted =
+        "Notification" in window && Notification.permission === "granted";
+      if (saved && granted) {
+        setNotifyOn(true);
+        notifyOnRef.current = true;
+      }
+    } catch {}
+  }, []);
+
+  // Ton nach Reload: der erste Klick/Tastendruck irgendwo entsperrt das Audio
+  // wieder (Browser-Autoplay-Regel), damit das Pling danach spielt.
+  useEffect(() => {
+    if (!notifyOn) return;
+    if (audioCtxRef.current?.state === "running") return;
+    const onGesture = () => {
+      void ensureAudio();
+      window.removeEventListener("pointerdown", onGesture);
+      window.removeEventListener("keydown", onGesture);
+    };
+    window.addEventListener("pointerdown", onGesture);
+    window.addEventListener("keydown", onGesture);
+    return () => {
+      window.removeEventListener("pointerdown", onGesture);
+      window.removeEventListener("keydown", onGesture);
+    };
+  }, [notifyOn]);
+
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 5000);
@@ -333,14 +365,9 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
     }
   }
 
-  async function toggleNotifications() {
-    if (notifyOn) {
-      setNotifyOn(false);
-      setToast({ kind: "ok", text: "🔕 Töne & Laptop-Meldungen aus." });
-      return;
-    }
+  // AudioContext anlegen/entsperren — braucht eine Nutzer-Geste (Autoplay-Schutz).
+  async function ensureAudio() {
     try {
-      // AudioContext muss durch einen Klick "entsperrt" werden (Autoplay-Schutz).
       if (!audioCtxRef.current) {
         const Ctor =
           window.AudioContext ??
@@ -351,16 +378,33 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
       if (audioCtxRef.current.state === "suspended") {
         await audioCtxRef.current.resume();
       }
+    } catch {}
+  }
+
+  async function toggleNotifications() {
+    if (notifyOn) {
+      setNotifyOn(false);
+      try {
+        localStorage.setItem("wishbeat_notify_on", "0");
+      } catch {}
+      setToast({ kind: "ok", text: "🔕 Töne & Laptop-Meldungen aus." });
+      return;
+    }
+    try {
+      await ensureAudio();
       let perm: NotificationPermission = "default";
       if ("Notification" in window) perm = await Notification.requestPermission();
       setNotifyOn(true);
       notifyOnRef.current = true;
+      try {
+        localStorage.setItem("wishbeat_notify_on", "1");
+      } catch {}
       playPling();
       setToast({
         kind: "ok",
         text:
           perm === "granted"
-            ? "🔔 An — Pling + Laptop-Meldung bei jedem neuen Wunsch."
+            ? "🔔 An — Pling + Laptop-Meldung bei jedem neuen Wunsch. Bleibt auch nach Neuladen an."
             : "🔔 Pling an. Laptop-Meldung hat der Browser blockiert — Banner + Pling laufen trotzdem."
       });
     } catch {
