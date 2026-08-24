@@ -334,7 +334,7 @@ export default function LiveQueueDisplay({ eventId, children }: Props) {
           {/* Song-Suche / andere Aktion — zwischen Jetzt läuft und Geplant */}
           {children}
 
-          {/* Geplant (max 8) — nach der Suche */}
+          {/* Geplant (max 5) — nach der Suche */}
           {data.next.length > 0 && (
             <div className="w-full max-w-md mb-6">
              <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
