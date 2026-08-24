@@ -100,8 +100,8 @@ export default function SongRequestForm({ eventId, preMode = false, djDisplayNam
 
   const search = useCallback(async (q: string) => {
     if (q.length < 2) { setTracks([]); return; }
-    // Gäste sehen 5 Treffer (mobil-freundlich, weniger Scrollen, klare Auswahl).
-    const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(q)}&limit=5`);
+    // Gäste sehen 8 Treffer (mobil-freundlich, weniger Scrollen).
+    const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(q)}&limit=8`);
     const data = await res.json();
     setTracks(data.tracks ?? []);
   }, []);
