@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 interface RatingItem {
-  event_id: string;
   rating: number;
   comment: string | null;
   nickname: string | null;
@@ -31,41 +29,17 @@ export default function PublicDjReviews({
 
   useEffect(() => {
     let cancelled = false;
+    // Serverseitige Schnittstelle: liest die komplette Bewertungs-Historie des
+    // DJs ueber den sicheren Server-Zugang — auch aus beendeten Events.
     async function load() {
-      const supabase = createClient();
-      // Alle Events des DJs holen (auch das aktuelle — Gaeste sollen die
-      // komplette Bewertungs-Historie sehen, inkl. der neuesten von heute)
-      const { data: evs } = await supabase
-        .from("events")
-        .select("id, name")
-        .eq("owner_id", ownerId);
-      if (!evs || evs.length === 0) {
+      try {
+        const res = await fetch(`/api/dj/${ownerId}/reviews`, { cache: "no-store" });
+        const data = await res.json();
+        if (cancelled) return;
+        setReviews((data.reviews ?? []) as RatingItem[]);
+      } catch {
         if (!cancelled) setReviews([]);
-        return;
       }
-      const evMap = new Map(evs.map((e: { id: string; name: string }) => [e.id, e.name]));
-      const evIds = evs.map((e: { id: string }) => e.id);
-
-      const { data: rs } = await supabase
-        .from("event_ratings")
-        .select("event_id, rating, comment, nickname, created_at")
-        .in("event_id", evIds)
-        .order("created_at", { ascending: false });
-
-      if (cancelled) return;
-      const items: RatingItem[] = (rs ?? []).map(
-        (r: {
-          event_id: string;
-          rating: number;
-          comment: string | null;
-          nickname: string | null;
-          created_at: string;
-        }) => ({
-          ...r,
-          event_name: evMap.get(r.event_id) ?? "—"
-        })
-      );
-      setReviews(items);
     }
     load();
     return () => {
@@ -88,9 +62,9 @@ export default function PublicDjReviews({
   const avg =
     Math.round((reviews.reduce((s, r) => s + r.rating, 0) / reviews.length) * 10) /
     10;
-  const showable = reviews.filter(
-    (r) => (r.comment && r.comment.trim().length > 0) || r.rating >= 4
-  );
+  // Alle Bewertungen zeigen (kein Filter mehr) — Gaeste sollen die komplette
+  // Historie sehen.
+  const showable = reviews;
   const visible = expanded ? showable : showable.slice(0, 3);
 
   return (
@@ -117,7 +91,7 @@ export default function PublicDjReviews({
           <ul className="flex flex-col gap-3">
             {visible.map((r, i) => (
               <li
-                key={`${r.event_id}-${r.created_at}-${i}`}
+                key={`${r.created_at}-${i}`}
                 className="rounded-2xl border border-white/10 bg-white/[0.04] p-3"
               >
                 <div className="flex items-center justify-between gap-2 mb-1.5">
