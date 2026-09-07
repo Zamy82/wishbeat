@@ -40,6 +40,37 @@ function toTrack(t: SpotifyTrack) {
   };
 }
 
+// Server-seitige Play-Aufzeichnung: laeuft ueber die (haeufigen) Gaeste-
+// Abfragen, damit Songs auch dann erfasst werden, wenn das DJ-Dashboard nicht
+// offen/im Vordergrund ist. Dedup: derselbe Track in den letzten 3 Min -> kein
+// erneuter Eintrag (nahe Duplikate faengt die Statistik zusaetzlich ab).
+async function recordPlay(
+  supabase: ReturnType<typeof adminClient>,
+  eventId: string,
+  cp: SpotifyTrack
+) {
+  const trackId = cp.id;
+  if (!trackId) return;
+  const threeMinAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+  const { data: recent } = await supabase
+    .from("event_plays")
+    .select("id")
+    .eq("event_id", eventId)
+    .eq("spotify_track_id", trackId)
+    .gte("played_at", threeMinAgo)
+    .limit(1);
+  if (recent && recent.length > 0) return;
+  await supabase.from("event_plays").insert({
+    event_id: eventId,
+    spotify_track_id: trackId,
+    title: cp.name ?? "",
+    artist: cp.artists.map((a) => a.name).join(", "),
+    cover_url: cp.album.images[1]?.url ?? cp.album.images[0]?.url ?? null,
+    source: "auto",
+    request_id: null
+  });
+}
+
 export async function GET(request: NextRequest) {
   const eventId = request.nextUrl.searchParams.get("event_id");
   if (!eventId) {
@@ -77,6 +108,11 @@ export async function GET(request: NextRequest) {
   if (!data.currently_playing) {
     return NextResponse.json({ playing: false, reason: "nothing_playing" });
   }
+
+  // Play best-effort mitschreiben — darf die Antwort nie blockieren/failen.
+  try {
+    await recordPlay(supabase, eventId, data.currently_playing);
+  } catch {}
 
   return NextResponse.json({
     playing: true,

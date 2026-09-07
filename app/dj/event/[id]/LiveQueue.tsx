@@ -238,8 +238,12 @@ export default function LiveQueue({ eventId, initialRequests }: Props) {
     }
 
     checkNowPlaying();
+    // Auch im Hintergrund pollen — Plays sollen erfasst werden, selbst wenn der
+    // DJ gerade in Spotify o.ae. ist (Browser drosselt Hintergrund-Timer, das
+    // reicht fuer Songs > 1 Min). Serverseitig sichert die event-queue-Route
+    // zusaetzlich ab.
     const id = setInterval(() => {
-      if (document.visibilityState === "visible") checkNowPlaying();
+      checkNowPlaying();
     }, 10000);
     return () => {
       cancelled = true;
