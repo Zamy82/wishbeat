@@ -15,6 +15,7 @@ import CrowdPulse from "./CrowdPulse";
 import TopBoosts from "./TopBoosts";
 import MemoryPlaylistButton from "./MemoryPlaylistButton";
 import ReviewRequestButton from "./ReviewRequestButton";
+import VorabInviteButton from "./VorabInviteButton";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -136,6 +137,10 @@ export default async function DjEventPage({ params }: Props) {
           </Link>
         </div>
       </header>
+
+      {event.is_active && event.wish_only && (
+        <VorabInviteButton eventName={event.name} eventUrl={eventUrl} />
+      )}
 
       <DjPushOptIn />
 
