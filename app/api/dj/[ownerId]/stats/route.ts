@@ -151,6 +151,42 @@ function computeEventStats(plays: PlayRow[], requests: ReqRow[]) {
   };
 }
 
+// Gleicht Wuensche gegen tatsaechlich gespielte Songs ab — unabhaengig vom
+// App-Status (viele DJs spielen Wuensche direkt aus Spotify, ohne sie in der
+// App auf "played" zu klicken). Match ueber Spotify-Track-ID ODER normalisierten
+// Titel+Kuenstler (faengt Album-/Single-/Remix-Varianten). Gibt nur Songtitel
+// zurueck, keine Gaeste-Namen.
+function computeWishMatch(plays: PlayRow[], requests: ReqRow[]) {
+  const playedKeys = new Set<string>();
+  const playedIds = new Set<string>();
+  for (const p of plays) {
+    playedKeys.add(`${normalizeTitle(p.title)}|${normalizeArtist(p.artist)}`);
+    if (p.spotify_track_id) playedIds.add(p.spotify_track_id);
+  }
+  // Wuensche auf eindeutige Songs eindampfen (mehrere Gaeste = selber Song)
+  const distinct = new Map<string, { title: string; artist: string; trackId: string }>();
+  for (const r of requests) {
+    const key = `${normalizeTitle(r.title)}|${normalizeArtist(r.artist)}`;
+    if (!distinct.has(key)) {
+      distinct.set(key, { title: r.title, artist: r.artist, trackId: r.spotify_track_id });
+    }
+  }
+  const playedList: { title: string; artist: string }[] = [];
+  const notPlayedList: { title: string; artist: string }[] = [];
+  for (const [key, w] of distinct) {
+    const matched = playedKeys.has(key) || (!!w.trackId && playedIds.has(w.trackId));
+    (matched ? playedList : notPlayedList).push({ title: w.title, artist: w.artist });
+  }
+  return {
+    requestEntries: requests.length,
+    wishSongsDistinct: distinct.size,
+    wishSongsPlayed: playedList.length,
+    wishSongsNotPlayed: notPlayedList.length,
+    playedList,
+    notPlayedList
+  };
+}
+
 export async function GET(req: NextRequest, ctx: RouteContext) {
   const { ownerId } = await ctx.params;
   const eventId = req.nextUrl.searchParams.get("event_id");
@@ -182,10 +218,10 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         .select("status, spotify_track_id, title, artist")
         .eq("event_id", eventId)
     ]);
-    const stats = computeEventStats(
-      (plays ?? []) as PlayRow[],
-      (requests ?? []) as ReqRow[]
-    );
+    const p = (plays ?? []) as PlayRow[];
+    const r = (requests ?? []) as ReqRow[];
+    const stats = computeEventStats(p, r);
+    const wishMatch = computeWishMatch(p, r);
     return NextResponse.json({
       event: {
         id: ev.id,
@@ -193,7 +229,8 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
         event_date: ev.event_date,
         is_active: ev.is_active
       },
-      ...stats
+      ...stats,
+      wishMatch
     });
   }
 
